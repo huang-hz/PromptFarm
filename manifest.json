@@ -26,6 +26,12 @@
     "scripting",
     "contextMenus"
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["sidepanel/icons.html"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "commands": {
     "open-side-panel": {
       "suggested_key": {

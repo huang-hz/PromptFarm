@@ -7,20 +7,23 @@
   <link rel="stylesheet" href="sidepanel.css" />
 </head>
 <body>
+  <!-- 线性图标集（SVG sprite，由 sidepanel.js 注入） -->
+  <div id="icon-sprite"></div>
+
   <div class="app">
     <!-- 顶栏：品牌 + 视图切换 + 主题 -->
     <header class="topbar">
       <div class="brand">
-        <span class="logo">⚡</span>
+        <svg class="ic ic-lg"><use href="#ic-bolt"/></svg>
         <span class="title">PromptHub</span>
       </div>
       <div class="top-actions">
         <div class="view-switch">
-          <button class="tab active" data-view="use" title="使用：搜索与使用提示词">🔍 使用</button>
-          <button class="tab" data-view="manage" title="管理：增删改查">🗂 管理</button>
+          <button class="tab active" data-view="use" title="使用：搜索与使用提示词"><svg class="ic"><use href="#ic-use"/></svg> 使用</button>
+          <button class="tab" data-view="manage" title="管理：增删改查"><svg class="ic"><use href="#ic-manage"/></svg> 管理</button>
         </div>
         <button id="btn-theme" class="icon-btn" title="切换主题" aria-label="主题">
-          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 18a6 6 0 1 1 0-12 6 6 0 0 1 0 12zm0-8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM12 1l.7 2.4L15 3l-1 2.3 2.2 1.2-2 1.6.8 2.4-2.5-.6L12 12l-1.5-2.1L8 10.5l.8-2.4-2-1.6L9 5.3 8 3l2.3.4L12 1z"/></svg>
+          <svg class="ic"><use href="#ic-moon"/></svg>
         </button>
       </div>
     </header>
@@ -30,13 +33,13 @@
       <div class="search-wrap">
         <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M15.5 14h-.8l-.3-.3a6.5 6.5 0 1 0-.7.7l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
         <input id="search" type="text" placeholder="搜索提示词…（支持拼音/首字母，如 xy）" autocomplete="off" spellcheck="false" />
-        <button id="search-clear" class="clear-btn" title="清空" hidden>✕</button>
+        <button id="search-clear" class="clear-btn" title="清空" hidden><svg class="ic ic-xs"><use href="#ic-close"/></svg></button>
       </div>
 
       <div class="filters" id="filters">
         <button class="chip active" data-filter="all">全部</button>
-        <button class="chip" data-filter="favorite" title="收藏">⭐ 收藏</button>
-        <button class="chip" data-filter="recent" title="最近使用">🕘 最近</button>
+        <button class="chip" data-filter="favorite" title="收藏"><svg class="ic"><use href="#ic-star"/></svg> 收藏</button>
+        <button class="chip" data-filter="recent" title="最近使用"><svg class="ic"><use href="#ic-clock"/></svg> 最近</button>
       </div>
 
       <div class="filters scene-row" id="scene-row" hidden></div>
@@ -56,7 +59,7 @@
           <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M15.5 14h-.8l-.3-.3a6.5 6.5 0 1 0-.7.7l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
           <input id="m-search" type="text" placeholder="搜索…" autocomplete="off" />
         </div>
-        <button class="btn-mini primary" id="btn-new">＋ 新建</button>
+        <button class="btn-mini primary" id="btn-new"><svg class="ic"><use href="#ic-plus"/></svg> 新建</button>
       </div>
 
       <div class="manage-filters">
@@ -65,12 +68,12 @@
           <div class="chip-row" id="m-cat-row">
             <button class="m-chip active" data-mcat="all">全部 <span class="cnt" id="m-cat-all">0</span></button>
           </div>
-          <button class="manage-tiny-btn" id="btn-manage-cat" title="管理分类（增删改）">⚙ 管理分类</button>
+          <button class="manage-tiny-btn" id="btn-manage-cat" title="管理分类（增删改）"><svg class="ic"><use href="#ic-gear"/></svg> 管理分类</button>
         </div>
         <div class="chip-group" id="m-tag-group" hidden>
           <span class="chip-label">场景</span>
           <div class="chip-row" id="m-tag-row"></div>
-          <button class="manage-tiny-btn" id="btn-manage-tag" title="管理当前分类的标签（增删改）">⚙ 管理标签</button>
+          <button class="manage-tiny-btn" id="btn-manage-tag" title="管理当前分类的标签（增删改）"><svg class="ic"><use href="#ic-gear"/></svg> 管理标签</button>
         </div>
       </div>
 
@@ -79,8 +82,8 @@
       <footer class="statusbar">
         <span id="m-count">0 条</span>
         <span class="io">
-          <button class="link-btn" id="btn-export">⬆ 导出</button>
-          <button class="link-btn" id="btn-import">⬇ 导入</button>
+          <button class="link-btn" id="btn-export"><svg class="ic"><use href="#ic-export"/></svg> 导出</button>
+          <button class="link-btn" id="btn-import"><svg class="ic"><use href="#ic-import"/></svg> 导入</button>
           <input type="file" id="import-file" accept=".json" hidden />
         </span>
       </footer>
@@ -89,7 +92,7 @@
     <!-- ========== 编辑器（全屏覆盖） ========== -->
     <div class="sheet" id="editor-sheet" hidden>
       <div class="sheet-head">
-        <button class="icon-btn" id="editor-back" title="返回" aria-label="返回">‹</button>
+        <button class="icon-btn" id="editor-back" title="返回" aria-label="返回"><svg class="ic"><use href="#ic-back"/></svg></button>
         <span id="editor-title" class="sheet-title">新建提示词</span>
         <button class="btn-mini danger-text" id="editor-delete" hidden>删除</button>
       </div>
@@ -106,7 +109,7 @@
           <label>分类</label>
           <div class="inline-select">
             <select name="categoryId" id="form-category"></select>
-            <button type="button" class="link-btn" id="add-category" title="新建分类">＋</button>
+            <button type="button" class="link-btn" id="add-category" title="新建分类"><svg class="ic"><use href="#ic-plus"/></svg></button>
           </div>
         </div>
         <div class="field">
@@ -135,7 +138,7 @@
       <div class="modal small">
         <div class="modal-head">
           <span id="cat-overlay-title">新建/编辑分类</span>
-          <button class="icon-btn" id="cat-close" aria-label="关闭">✕</button>
+          <button class="icon-btn" id="cat-close" aria-label="关闭"><svg class="ic"><use href="#ic-close"/></svg></button>
         </div>
         <div class="modal-body">
           <div class="field">
@@ -153,9 +156,9 @@
     <!-- ========== 分类管理面板（全屏） ========== -->
     <div class="sheet" id="catm-sheet" hidden>
       <div class="sheet-head">
-        <button class="icon-btn" id="catm-back" title="返回" aria-label="返回">‹</button>
+        <button class="icon-btn" id="catm-back" title="返回" aria-label="返回"><svg class="ic"><use href="#ic-back"/></svg></button>
         <span class="sheet-title">管理分类</span>
-        <button class="btn-mini primary" id="catm-add">＋ 新建</button>
+        <button class="btn-mini primary" id="catm-add"><svg class="ic"><use href="#ic-plus"/></svg> 新建</button>
       </div>
       <div class="sheet-body" id="catm-list"></div>
     </div>
@@ -163,9 +166,9 @@
     <!-- ========== 标签管理面板（全屏，作用于当前分类） ========== -->
     <div class="sheet" id="tagm-sheet" hidden>
       <div class="sheet-head">
-        <button class="icon-btn" id="tagm-back" title="返回" aria-label="返回">‹</button>
+        <button class="icon-btn" id="tagm-back" title="返回" aria-label="返回"><svg class="ic"><use href="#ic-back"/></svg></button>
         <span class="sheet-title" id="tagm-title">管理标签</span>
-        <button class="btn-mini primary" id="tagm-add">＋ 新建</button>
+        <button class="btn-mini primary" id="tagm-add"><svg class="ic"><use href="#ic-plus"/></svg> 新建</button>
       </div>
       <div class="sheet-body" id="tagm-list"></div>
     </div>
@@ -173,7 +176,7 @@
     <!-- ========== 导入确认 ========== -->
     <div class="modal-overlay" id="import-overlay" hidden>
       <div class="modal small">
-        <div class="modal-head"><span>导入数据</span><button class="icon-btn" id="import-close">✕</button></div>
+        <div class="modal-head"><span>导入数据</span><button class="icon-btn" id="import-close"><svg class="ic"><use href="#ic-close"/></svg></button></div>
         <div class="modal-body">
           <p class="import-info">检测到 <b id="import-count">0</b> 条提示词。</p>
           <div class="field">
@@ -196,12 +199,12 @@
       <div class="modal" role="dialog" aria-modal="true">
         <div class="modal-head">
           <span id="modal-title">填写变量</span>
-          <button class="icon-btn" id="modal-close" aria-label="关闭">✕</button>
+          <button class="icon-btn" id="modal-close" aria-label="关闭"><svg class="ic"><use href="#ic-close"/></svg></button>
         </div>
         <div class="modal-body" id="modal-body"></div>
         <div class="modal-actions">
-          <button class="btn ghost" id="modal-copy">📋 复制</button>
-          <button class="btn primary" id="modal-insert">⤵ 插入输入框</button>
+          <button class="btn ghost" id="modal-copy"><svg class="ic"><use href="#ic-copy"/></svg> 复制</button>
+          <button class="btn primary" id="modal-insert"><svg class="ic"><use href="#ic-insert"/></svg> 插入输入框</button>
         </div>
       </div>
     </div>

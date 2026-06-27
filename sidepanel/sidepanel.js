@@ -45,8 +45,21 @@
   const elCount = $('#status-count');
   const elToast = $('#toast');
 
+  // 加载线性图标 sprite 到 #icon-sprite
+  async function loadIcons() {
+    const host = $('#icon-sprite');
+    if (!host) return;
+    try {
+      const res = await fetch(chrome.runtime.getURL('sidepanel/icons.html'));
+      host.innerHTML = await res.text();
+    } catch (e) {
+      console.warn('loadIcons failed:', e && e.message);
+    }
+  }
+
   // ---------- 初始化 ----------
   async function init() {
+    await loadIcons();                       // 先注入图标 sprite
     await store.ensureInit(PH.seed);
     state.settings = await store.getSettings();
     state.categories = await store.getCategories();
@@ -164,6 +177,10 @@
   function escapeHtml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
+  // 线性图标：icon('star') => <svg class="ic"><use href="#ic-star"/></svg>
+  function icon(name, cls) {
+    return '<svg class="ic' + (cls ? ' ' + cls : '') + '"><use href="#ic-' + name + '"/></svg>';
+  }
   function highlight(text, q) {
     if (!q) return escapeHtml(text);
     const lower = String(text).toLowerCase();
@@ -177,7 +194,7 @@
     elClear.hidden = !state.query;
     if (!res.length) {
       const hasQuery = !!state.query;
-      elResults.innerHTML = '<div class="empty"><div class="emoji">' + (hasQuery ? '🔍' : '📭') + '</div>' +
+      elResults.innerHTML = '<div class="empty"><div class="emoji">' + (hasQuery ? icon('search', 'ic-xl') : icon('inbox', 'ic-xl')) + '</div>' +
         '<div class="msg">' + (hasQuery ? '没有匹配的提示词' : '这里还没有提示词') + '</div>' +
         '<div class="sub">' + (hasQuery ? '试试换个关键词或检查筛选条件' : '切换到「管理」创建第一个') + '</div></div>';
       return;
@@ -193,15 +210,15 @@
       return '<div class="result-item' + (i === state.selectedIndex ? ' selected' : '') + '" data-idx="' + i + '" data-id="' + p.id + '">' +
         '<div class="result-head">' +
           '<span class="result-title">' + highlight(p.title, state.query) + '</span>' +
-          (p.favorite ? '<span class="result-star">★</span>' : '') +
+          (p.favorite ? '<span class="result-star">' + icon('star-fill') + '</span>' : '') +
         '</div>' +
         (p.description ? '<div class="result-desc">' + escapeHtml(p.description) + '</div>' : '') +
         (tags ? '<div class="result-tags">' + tags + '</div>' : '') +
-        '<div class="result-meta">' + (hasVar ? '<span>🧩 含变量</span>' : '') + (p.usageCount ? '<span>用 ' + p.usageCount + ' 次</span>' : '') + '</div>' +
+        '<div class="result-meta">' + (hasVar ? '<span>' + icon('variable') + ' 含变量</span>' : '') + (p.usageCount ? '<span>用 ' + p.usageCount + ' 次</span>' : '') + '</div>' +
         '<div class="result-actions">' +
-          '<button class="mini-btn act-copy">📋 复制</button>' +
-          '<button class="mini-btn act-insert">⤵ 插入</button>' +
-          '<button class="mini-btn act-fav">' + (p.favorite ? '取消收藏' : '⭐ 收藏') + '</button>' +
+          '<button class="mini-btn act-copy">' + icon('copy') + ' 复制</button>' +
+          '<button class="mini-btn act-insert">' + icon('insert') + ' 插入</button>' +
+          '<button class="mini-btn act-fav">' + (p.favorite ? '取消收藏' : icon('star') + ' 收藏') + '</button>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -379,7 +396,7 @@
     const wrap = $('#manage-list');
 
     if (!list.length) {
-      wrap.innerHTML = '<div class="empty"><div class="emoji">📭</div><div class="msg">' + (state.mQuery ? '没有匹配项' : '还没有提示词') + '</div><div class="sub">点击「＋ 新建」创建</div></div>';
+      wrap.innerHTML = '<div class="empty"><div class="emoji">' + icon('inbox', 'ic-xl') + '</div><div class="msg">' + (state.mQuery ? '没有匹配项' : '还没有提示词') + '</div><div class="sub">点击「新建」创建</div></div>';
       return;
     }
 
@@ -388,7 +405,7 @@
       const vars = template.extractVariables(p.content);
       const tags = (p.tags || []).slice(0, 3).map((t) => '<span class="m-tag">' + escapeHtml(t) + '</span>').join('');
       return '<div class="m-card" data-id="' + p.id + '">' +
-        '<button class="star ' + (p.favorite ? 'on' : '') + '" data-fav="' + p.id + '">' + (p.favorite ? '★' : '☆') + '</button>' +
+        '<button class="star ' + (p.favorite ? 'on' : '') + '" data-fav="' + p.id + '">' + icon(p.favorite ? 'star-fill' : 'star') + '</button>' +
         '<div class="info">' +
           '<div class="m-title">' + highlight(p.title, state.mQuery) + '</div>' +
           (p.description ? '<div class="m-desc">' + escapeHtml(p.description) + '</div>' : '') +
@@ -399,7 +416,7 @@
             (p.usageCount ? '<span class="m-use">用 ' + p.usageCount + ' 次</span>' : '') +
           '</div>' +
         '</div>' +
-        '<span class="chev">›</span>' +
+        '<span class="chev">' + icon('chevron') + '</span>' +
       '</div>';
     }).join('');
 
@@ -521,14 +538,14 @@
     state.prompts.forEach((p) => { if (p.categoryId) counts[p.categoryId] = (counts[p.categoryId] || 0) + 1; });
     const list = $('#catm-list');
     if (!state.categories.length) {
-      list.innerHTML = '<div class="mgr-empty">还没有分类，点右上「＋ 新建」</div>';
+      list.innerHTML = '<div class="mgr-empty">还没有分类，点右上「新建」</div>';
       return;
     }
     list.innerHTML =
-      '<div class="mgr-hint">共 ' + state.categories.length + ' 个分类。拖动左侧 ≡ 调整顺序，编辑改名，删除会把该分类下提示词变为「未分类」。</div>' +
+      '<div class="mgr-hint">共 ' + state.categories.length + ' 个分类。拖动左侧手柄调整顺序，编辑改名，删除会把该分类下提示词变为「未分类」。</div>' +
       state.categories.map((c) =>
         '<div class="mgr-item" data-cid="' + c.id + '" draggable="true">' +
-          '<span class="mgr-handle" title="拖动排序">≡</span>' +
+          '<span class="mgr-handle" title="拖动排序">' + icon('grip') + '</span>' +
           '<div class="mgr-main"><div class="mgr-name">' + escapeHtml(c.name) + '</div>' +
             '<div class="mgr-sub">' + (counts[c.id] || 0) + ' 条提示词</div></div>' +
           '<div class="mgr-actions">' +
@@ -641,10 +658,11 @@
       return;
     }
     list.innerHTML =
-      '<div class="mgr-hint">共 ' + tags.length + ' 个标签（仅作用于当前分类）。拖动 ≡ 调整顺序，重命名/删除会批量更新该分类下的提示词。</div>' +
+      '<div class="mgr-hint">共 ' + tags.length + ' 个标签（仅作用于当前分类）。拖动手柄调整顺序，重命名/删除会批量更新该分类下的提示词。</div>' +
       tags.map((t) =>
         '<div class="mgr-item" data-tag="' + escapeHtml(t) + '" draggable="true">' +
-          '<span class="mgr-handle" title="拖动排序">≡</span>' +
+          '<span class="mgr-handle" title="拖动排序">' + icon('grip') + '</span>' +
+          '<span class="mgr-tag-ico">' + icon('hash') + '</span>' +
           '<div class="mgr-main"><div class="mgr-name">' + escapeHtml(t) + '</div>' +
             '<div class="mgr-sub">' + tagCounts[t] + ' 条提示词</div></div>' +
           '<div class="mgr-actions">' +
