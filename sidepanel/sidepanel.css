@@ -165,16 +165,9 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 .chip.icon-only { padding: 5px; }
 .chip.icon-only .ic { margin-right: 0; width: 15px; height: 15px; }
 
-/* === 分类 chip：实心药丸，主色调，加粗 —— 突出"大类" === */
+/* === 分类 chip：默认中性，选中主色调 —— 突出大类 === */
 .chip.cat-chip, .m-chip.cat-chip {
-  background: var(--primary-soft);
-  border-color: transparent;
-  color: var(--primary);
   font-weight: 600;
-}
-.chip.cat-chip:hover, .m-chip.cat-chip:hover {
-  background: var(--primary);
-  color: #fff;
 }
 .chip.cat-chip.active, .m-chip.cat-chip.active {
   background: var(--primary);
@@ -436,6 +429,29 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 .sheet-foot { padding: 12px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
 .btn { height: 40px; border-radius: 9px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.12s; }
 .btn.block { width: 100%; }
+
+/* 头部按钮组（新建 + 设置） */
+.head-btns { display: flex; gap: 4px; align-items: center; }
+.icon-btn.primary-icon { background: var(--primary); color: #fff; }
+.icon-btn.primary-icon:hover { filter: brightness(1.1); background: var(--primary); }
+
+/* 显示设置面板 */
+.setting-hint { font-size: 12.5px; color: var(--text-faint); line-height: 1.6; padding: 4px 0 16px; }
+.setting-item {
+  background: var(--bg-soft); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px; margin-bottom: 14px;
+}
+.setting-label { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.setting-label span { font-size: 14px; font-weight: 600; color: var(--text); }
+.setting-num {
+  width: 64px; height: 32px; text-align: center;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg); color: var(--text);
+  font-size: 14px; font-weight: 600; outline: none;
+}
+.setting-num:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.setting-range { width: 100%; accent-color: var(--primary); cursor: pointer; }
+.setting-desc { font-size: 12px; color: var(--text-faint); margin-top: 8px; }
 .btn.primary { background: var(--primary); color: #fff; }
 .btn.primary:hover { filter: brightness(1.08); }
 .btn.ghost { background: var(--bg-soft); color: var(--text); border: 1px solid var(--border); }

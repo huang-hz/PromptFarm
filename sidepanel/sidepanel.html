@@ -158,7 +158,10 @@
       <div class="sheet-head">
         <button class="icon-btn" id="catm-back" title="返回" aria-label="返回"><svg class="ic"><use href="#ic-back"/></svg></button>
         <span class="sheet-title">管理分类</span>
-        <button class="btn-mini primary" id="catm-add"><svg class="ic"><use href="#ic-plus"/></svg> 新建</button>
+        <div class="head-btns">
+          <button class="icon-btn" id="catm-settings" title="显示设置"><svg class="ic"><use href="#ic-gear"/></svg></button>
+          <button class="icon-btn primary-icon" id="catm-add" title="新建分类"><svg class="ic"><use href="#ic-plus"/></svg></button>
+        </div>
       </div>
       <div class="sheet-body" id="catm-list"></div>
     </div>
@@ -168,9 +171,42 @@
       <div class="sheet-head">
         <button class="icon-btn" id="tagm-back" title="返回" aria-label="返回"><svg class="ic"><use href="#ic-back"/></svg></button>
         <span class="sheet-title" id="tagm-title">管理标签</span>
-        <button class="btn-mini primary" id="tagm-add"><svg class="ic"><use href="#ic-plus"/></svg> 新建</button>
+        <div class="head-btns">
+          <button class="icon-btn" id="tagm-settings" title="显示设置"><svg class="ic"><use href="#ic-gear"/></svg></button>
+          <button class="icon-btn primary-icon" id="tagm-add" title="新建标签"><svg class="ic"><use href="#ic-plus"/></svg></button>
+        </div>
       </div>
       <div class="sheet-body" id="tagm-list"></div>
+    </div>
+
+    <!-- ========== 显示设置面板（全屏） ========== -->
+    <div class="sheet" id="settings-sheet" hidden>
+      <div class="sheet-head">
+        <button class="icon-btn" id="settings-back" title="返回" aria-label="返回"><svg class="ic"><use href="#ic-back"/></svg></button>
+        <span class="sheet-title">显示设置</span>
+      </div>
+      <div class="sheet-body">
+        <div class="setting-hint">设置「使用界面」筛选区默认展示多少条分类和标签。超出部分仍可通过搜索访问，0 表示全部展示。</div>
+        <div class="setting-item">
+          <div class="setting-label">
+            <span>默认展示分类数</span>
+            <input type="number" class="setting-num" id="set-cat-count" min="0" max="50" />
+          </div>
+          <input type="range" class="setting-range" id="set-cat-range" min="0" max="20" />
+          <div class="setting-desc">使用界面顶部分类筛选区默认显示的条数</div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-label">
+            <span>默认展示标签数</span>
+            <input type="number" class="setting-num" id="set-tag-count" min="0" max="50" />
+          </div>
+          <input type="range" class="setting-range" id="set-tag-range" min="0" max="20" />
+          <div class="setting-desc">使用界面场景标签行默认显示的条数</div>
+        </div>
+      </div>
+      <div class="sheet-foot">
+        <button class="btn primary block" id="settings-save">保存</button>
+      </div>
     </div>
 
     <!-- ========== 导入确认 ========== -->

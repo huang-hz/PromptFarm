@@ -77,7 +77,12 @@
       let needRefresh = false;
       if (changes[store.KEYS.prompts]) { state.prompts = changes[store.KEYS.prompts].newValue || []; needRefresh = true; }
       if (changes[store.KEYS.categories]) { state.categories = changes[store.KEYS.categories].newValue || []; renderCategoryChips(); renderManageFilters(); renderSceneRow(); needRefresh = true; }
-      if (changes[store.KEYS.settings]) { state.settings = Object.assign(state.settings, changes[store.KEYS.settings].newValue); applyTheme(); }
+      if (changes[store.KEYS.settings]) {
+        state.settings = Object.assign(state.settings, changes[store.KEYS.settings].newValue);
+        applyTheme();
+        renderCategoryChips();
+        renderSceneRow();
+      }
       if (needRefresh) { renderSceneRow(); refresh(); refreshManage(); }
     });
 
@@ -112,7 +117,9 @@
   // ========== 使用视图 ==========
   function renderCategoryChips() {
     elFilters.querySelectorAll('.chip[data-category]').forEach((c) => c.remove());
-    state.categories.forEach((c) => {
+    const limit = state.settings.displayCatCount || 0;   // 0 = 全部
+    const cats = limit > 0 ? state.categories.slice(0, limit) : state.categories;
+    cats.forEach((c) => {
       const btn = document.createElement('button');
       btn.className = 'chip cat-chip';
       btn.dataset.filter = c.id;
@@ -150,8 +157,12 @@
       row.innerHTML = '';
       return;
     }
+    // 按设置截取，但保证当前选中的标签始终可见
+    const limit = state.settings.displayTagCount || 0;   // 0 = 全部
+    let shown = limit > 0 ? tags.slice(0, limit) : tags.slice();
+    if (state.sceneTag && shown.indexOf(state.sceneTag) < 0) shown.push(state.sceneTag);
     row.hidden = false;
-    row.innerHTML = tags.map((t) =>
+    row.innerHTML = shown.map((t) =>
       '<button class="chip tag-chip' + (state.sceneTag === t ? ' active' : '') + '" data-scene="' + escapeHtml(t) + '">' +
         '<span class="hash">#</span>' + escapeHtml(t) + '<span class="cnt">' + tagCounts[t] + '</span></button>'
     ).join('');
@@ -728,6 +739,51 @@
     toast('已新建标签「' + tagName + '」');
   }
 
+  // ---------- 显示设置面板 ----------
+  const SETTING_RANGE_MAX = 20;   // 滑块上限（输入框可超过，最高 50）
+  function openSettingsSheet() {
+    const cc = state.settings.displayCatCount || 0;
+    const tc = state.settings.displayTagCount || 0;
+    $('#set-cat-count').value = cc;
+    $('#set-tag-count').value = tc;
+    $('#set-cat-range').value = Math.min(cc, SETTING_RANGE_MAX);
+    $('#set-tag-range').value = Math.min(tc, SETTING_RANGE_MAX);
+    $('#settings-sheet').hidden = false;
+  }
+  function closeSettingsSheet() { $('#settings-sheet').hidden = true; }
+  function bindSettingPair(rangeId, numId) {
+    const r = $(rangeId), n = $(numId);
+    // 滑块 → 输入框
+    r.addEventListener('input', () => { n.value = r.value; });
+    // 输入框 → 滑块（超过上限则钳到上限位置）
+    n.addEventListener('input', () => {
+      let v = parseInt(n.value, 10);
+      if (isNaN(v) || v < 0) v = 0;
+      if (v > 50) v = 50;
+      r.value = Math.min(v, SETTING_RANGE_MAX);
+    });
+    n.addEventListener('blur', () => {
+      let v = parseInt(n.value, 10);
+      if (isNaN(v) || v < 0) v = 0;
+      if (v > 50) v = 50;
+      n.value = v;
+    });
+  }
+  async function saveDisplaySettings() {
+    let cc = parseInt($('#set-cat-count').value, 10);
+    let tc = parseInt($('#set-tag-count').value, 10);
+    if (isNaN(cc) || cc < 0) cc = 0;
+    if (isNaN(tc) || tc < 0) tc = 0;
+    if (cc > 50) cc = 50;
+    if (tc > 50) tc = 50;
+    state.settings = await store.saveSettings({ displayCatCount: cc, displayTagCount: tc });
+    closeSettingsSheet();
+    renderCategoryChips();
+    renderSceneRow();
+    refresh();
+    toast('显示设置已保存');
+  }
+
   // ---------- 导入导出 ----------
   async function doExport() {
     const data = await store.exportAll();
@@ -830,6 +886,14 @@
     addTagToFirstPrompt(t);
   });
 
+  // 显示设置面板
+  $('#catm-settings').addEventListener('click', openSettingsSheet);
+  $('#tagm-settings').addEventListener('click', openSettingsSheet);
+  $('#settings-back').addEventListener('click', closeSettingsSheet);
+  $('#settings-save').addEventListener('click', saveDisplaySettings);
+  bindSettingPair('#set-cat-range', '#set-cat-count');
+  bindSettingPair('#set-tag-range', '#set-tag-count');
+
   // 导入导出
   $('#btn-export').addEventListener('click', doExport);
   $('#btn-import').addEventListener('click', () => $('#import-file').click());
@@ -864,6 +928,7 @@
     }
     if (e.key === 'Escape') {
       if (!$('#editor-sheet').hidden) { closeEditor(); return; }
+      if (!$('#settings-sheet').hidden) { closeSettingsSheet(); return; }
       if (!$('#catm-sheet').hidden) { $('#catm-sheet').hidden = true; return; }
       if (!$('#tagm-sheet').hidden) { $('#tagm-sheet').hidden = true; return; }
       if (!$('#modal-overlay').hidden) { closeVariableModal(); return; }
