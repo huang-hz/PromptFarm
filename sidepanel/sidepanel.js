@@ -137,8 +137,9 @@
     if (needCollapse) {
       const t = document.createElement('button');
       t.className = 'chip expand-btn';
-      t.innerHTML = icon(state.catExpanded ? 'collapse' : 'expand') +
-        '<span>' + (state.catExpanded ? '收起' : ('展开 +' + (all.length - limit))) + '</span>';
+      const expanded = state.catExpanded;
+      t.title = expanded ? '收起' : ('展开（还有 ' + (all.length - limit) + ' 个）');
+      t.innerHTML = icon(expanded ? 'collapse' : 'expand');
       t.addEventListener('click', () => { state.catExpanded = !state.catExpanded; renderCategoryChips(); });
       elFilters.appendChild(t);
     }
@@ -186,8 +187,9 @@
     ).join('');
     // 追加展开/收起按钮
     if (needCollapse) {
-      html += '<button class="chip expand-btn">' + icon(state.tagExpanded ? 'collapse' : 'expand') +
-        '<span>' + (state.tagExpanded ? '收起' : ('展开 +' + (tags.length - limit))) + '</span></button>';
+      const expanded = state.tagExpanded;
+      const t = expanded ? '收起' : ('展开（还有 ' + (tags.length - limit) + ' 个）');
+      html += '<button class="chip expand-btn" title="' + escapeHtml(t) + '">' + icon(expanded ? 'collapse' : 'expand') + '</button>';
     }
     row.innerHTML = html;
     // 绑定标签点击（复用现有 scene-row 监听，见事件绑定）
