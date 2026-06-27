@@ -23,6 +23,8 @@
     activeFilter: 'all',
     sceneTag: null,              // null | 标签名（使用视图：某分类下的场景筛选）
     selectedIndex: 0,
+    catExpanded: false,          // 使用视图：分类是否展开（显示全部）
+    tagExpanded: false,          // 使用视图：标签是否展开（显示全部）
     results: [],
     pendingPrompt: null,
     pendingAction: null,
@@ -116,9 +118,12 @@
 
   // ========== 使用视图 ==========
   function renderCategoryChips() {
-    elFilters.querySelectorAll('.chip[data-category]').forEach((c) => c.remove());
+    elFilters.querySelectorAll('.chip[data-category], .chip.expand-btn').forEach((c) => c.remove());
+    const all = state.categories;
     const limit = state.settings.displayCatCount || 0;   // 0 = 全部
-    const cats = limit > 0 ? state.categories.slice(0, limit) : state.categories;
+    const needCollapse = limit > 0 && all.length > limit; // 只有超出限制才需要收起
+    const showAll = !needCollapse || state.catExpanded;
+    const cats = showAll ? all : all.slice(0, limit);
     cats.forEach((c) => {
       const btn = document.createElement('button');
       btn.className = 'chip cat-chip';
@@ -128,11 +133,21 @@
       btn.addEventListener('click', () => selectFilter(c.id));
       elFilters.appendChild(btn);
     });
+    // 追加展开/收起按钮
+    if (needCollapse) {
+      const t = document.createElement('button');
+      t.className = 'chip expand-btn';
+      t.innerHTML = icon(state.catExpanded ? 'collapse' : 'expand') +
+        '<span>' + (state.catExpanded ? '收起' : ('展开 +' + (all.length - limit))) + '</span>';
+      t.addEventListener('click', () => { state.catExpanded = !state.catExpanded; renderCategoryChips(); });
+      elFilters.appendChild(t);
+    }
   }
 
   function selectFilter(filter) {
     state.activeFilter = filter;
     state.sceneTag = null;
+    state.tagExpanded = false;   // 切换分类时收起标签（各分类标签数不同）
     elFilters.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c.dataset.filter === filter));
     renderSceneRow();
     state.selectedIndex = 0;
@@ -159,13 +174,23 @@
     }
     // 按设置截取，但保证当前选中的标签始终可见
     const limit = state.settings.displayTagCount || 0;   // 0 = 全部
-    let shown = limit > 0 ? tags.slice(0, limit) : tags.slice();
-    if (state.sceneTag && shown.indexOf(state.sceneTag) < 0) shown.push(state.sceneTag);
+    const needCollapse = limit > 0 && tags.length > limit; // 只有超出限制才需要收起
+    const showAll = !needCollapse || state.tagExpanded;
+    let shown = showAll ? tags.slice() : tags.slice(0, limit);
+    // 收起态下，保证当前选中的标签可见（即使它不在前 limit 个）
+    if (!showAll && state.sceneTag && shown.indexOf(state.sceneTag) < 0) shown.push(state.sceneTag);
     row.hidden = false;
-    row.innerHTML = shown.map((t) =>
+    let html = shown.map((t) =>
       '<button class="chip tag-chip' + (state.sceneTag === t ? ' active' : '') + '" data-scene="' + escapeHtml(t) + '">' +
         '<span class="hash">#</span>' + escapeHtml(t) + '<span class="cnt">' + tagCounts[t] + '</span></button>'
     ).join('');
+    // 追加展开/收起按钮
+    if (needCollapse) {
+      html += '<button class="chip expand-btn">' + icon(state.tagExpanded ? 'collapse' : 'expand') +
+        '<span>' + (state.tagExpanded ? '收起' : ('展开 +' + (tags.length - limit))) + '</span></button>';
+    }
+    row.innerHTML = html;
+    // 绑定标签点击（复用现有 scene-row 监听，见事件绑定）
   }
 
   function refresh() {
@@ -777,6 +802,8 @@
     if (cc > 50) cc = 50;
     if (tc > 50) tc = 50;
     state.settings = await store.saveSettings({ displayCatCount: cc, displayTagCount: tc });
+    state.catExpanded = false;
+    state.tagExpanded = false;
     closeSettingsSheet();
     renderCategoryChips();
     renderSceneRow();
@@ -844,6 +871,12 @@
   $('#scene-row').addEventListener('click', (e) => {
     const chip = e.target.closest('.chip');
     if (!chip) return;
+    // 展开/收起按钮
+    if (chip.classList.contains('expand-btn')) {
+      state.tagExpanded = !state.tagExpanded;
+      renderSceneRow();
+      return;
+    }
     state.sceneTag = state.sceneTag === chip.dataset.scene ? null : chip.dataset.scene;
     state.selectedIndex = 0;
     renderSceneRow();
