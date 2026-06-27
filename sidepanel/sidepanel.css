@@ -173,7 +173,6 @@ html, body {
 .result-item:hover { background: var(--bg-hover); }
 .result-item.selected { background: var(--primary-soft); border-color: var(--primary); }
 .result-head { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
-.result-cat { font-size: 14px; flex-shrink: 0; }
 .result-title {
   font-weight: 600; font-size: 14px; color: var(--text); flex: 1;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -315,7 +314,6 @@ html, body {
   border-radius: var(--radius); margin-bottom: 8px;
   background: var(--bg);
 }
-.mgr-item .mgr-ico { font-size: 18px; flex-shrink: 0; }
 .mgr-item .mgr-main { flex: 1; min-width: 0; }
 .mgr-item .mgr-name { font-weight: 600; font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mgr-item .mgr-sub { font-size: 11.5px; color: var(--text-faint); margin-top: 1px; }

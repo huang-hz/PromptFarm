@@ -104,7 +104,7 @@
       btn.className = 'chip';
       btn.dataset.filter = c.id;
       btn.dataset.category = '1';
-      btn.textContent = (c.icon || '') + ' ' + c.name;
+      btn.textContent = c.name;
       btn.addEventListener('click', () => selectFilter(c.id));
       elFilters.appendChild(btn);
     });
@@ -195,7 +195,6 @@
       const hasVar = template.hasVariables(p.content);
       return '<div class="result-item' + (i === state.selectedIndex ? ' selected' : '') + '" data-idx="' + i + '" data-id="' + p.id + '">' +
         '<div class="result-head">' +
-          (cat ? '<span class="result-cat">' + escapeHtml(cat.icon || '📁') + '</span>' : '') +
           '<span class="result-title">' + highlight(p.title, state.query) + '</span>' +
           (p.favorite ? '<span class="result-star">★</span>' : '') +
         '</div>' +
@@ -328,7 +327,7 @@
       const b = document.createElement('button');
       b.className = 'm-chip' + (state.mCat === c.id ? ' active' : '');
       b.dataset.mcat = c.id;
-      b.innerHTML = escapeHtml((c.icon || '') + ' ' + c.name) + ' <span class="cnt">' + (counts[c.id] || 0) + '</span>';
+      b.innerHTML = escapeHtml(c.name) + ' <span class="cnt">' + (counts[c.id] || 0) + '</span>';
       b.addEventListener('click', () => { state.mCat = c.id; state.mTag = null; renderManageFilters(); refreshManage(); });
       row.appendChild(b);
     });
@@ -446,7 +445,7 @@
 
   function fillCategorySelect() {
     $('#form-category').innerHTML = '<option value="">（未分类）</option>' +
-      state.categories.map((c) => '<option value="' + c.id + '">' + escapeHtml((c.icon || '') + ' ' + c.name) + '</option>').join('');
+      state.categories.map((c) => '<option value="' + c.id + '">' + escapeHtml(c.name) + '</option>').join('');
   }
 
   function updateVarPreview() {
@@ -497,7 +496,6 @@
     const c = id ? state.categories.find((x) => x.id === id) : null;
     $('#cat-overlay-title').textContent = c ? '编辑分类' : '新建分类';
     $('#cat-name').value = c ? c.name : '';
-    $('#cat-icon').value = c ? (c.icon || '') : '';
     $('#cat-overlay').hidden = false;
     setTimeout(() => $('#cat-name').focus(), 50);
   }
@@ -506,8 +504,7 @@
     if (!name) { toast('请填写分类名称'); return; }
     await store.saveCategory({
       id: state.editingCategoryId || undefined,
-      name: name,
-      icon: $('#cat-icon').value.trim() || '📁'
+      name: name
     });
     state.categories = await store.getCategories();
     $('#cat-overlay').hidden = true;
@@ -537,7 +534,6 @@
       '<div class="mgr-hint">共 ' + state.categories.length + ' 个分类。编辑修改名称/图标，删除会把该分类下提示词变为「未分类」。</div>' +
       state.categories.map((c) =>
         '<div class="mgr-item" data-cid="' + c.id + '">' +
-          '<span class="mgr-ico">' + escapeHtml(c.icon || '📁') + '</span>' +
           '<div class="mgr-main"><div class="mgr-name">' + escapeHtml(c.name) + '</div>' +
             '<div class="mgr-sub">' + (counts[c.id] || 0) + ' 条提示词</div></div>' +
           '<div class="mgr-actions">' +
@@ -580,7 +576,7 @@
   }
   function renderTagmList() {
     const cat = state.categories.find((c) => c.id === state.mCat);
-    $('#tagm-title').textContent = '管理标签 · ' + (cat ? (cat.icon || '') + ' ' + cat.name : '');
+    $('#tagm-title').textContent = '管理标签 · ' + (cat ? cat.name : '');
     const tagCounts = {};
     state.prompts
       .filter((p) => p.categoryId === state.mCat)

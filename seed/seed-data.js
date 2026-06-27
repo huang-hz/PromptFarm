@@ -6,11 +6,11 @@
   const NS = root.PH || (root.PH = {});
 
   const categories = [
-    { id: 'c_write', name: '写作', icon: '✍️', sortOrder: 0 },
-    { id: 'c_code', name: '编程', icon: '💻', sortOrder: 1 },
-    { id: 'c_market', name: '营销', icon: '📢', sortOrder: 2 },
-    { id: 'c_study', name: '学习', icon: '📚', sortOrder: 3 },
-    { id: 'c_life', name: '生活', icon: '🌱', sortOrder: 4 }
+    { id: 'c_write', name: '写作', sortOrder: 0 },
+    { id: 'c_code', name: '编程', sortOrder: 1 },
+    { id: 'c_market', name: '营销', sortOrder: 2 },
+    { id: 'c_study', name: '学习', sortOrder: 3 },
+    { id: 'c_life', name: '生活', sortOrder: 4 }
   ];
 
   const prompts = [

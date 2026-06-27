@@ -146,7 +146,7 @@ node tools/make-icons.js
     "createdAt": 1700000000000,
     "updatedAt": 1700000000000
   }],
-  "categories": [{ "id": "c_write", "name": "写作", "icon": "✍️" }],
+  "categories": [{ "id": "c_write", "name": "写作" }],
   "settings": { "defaultAction": "copy", "theme": "auto" }
 }
 ```
