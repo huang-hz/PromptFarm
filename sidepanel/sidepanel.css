@@ -144,18 +144,13 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 
 /* ---------- 筛选 chips ---------- */
 .filters {
-  display: flex; gap: 6px;
+  display: flex; flex-wrap: wrap; gap: 6px;
   padding: 0 14px 8px;
-  overflow-x: auto; flex-shrink: 0;
-  scrollbar-width: thin;
+  flex-shrink: 0;
 }
-.filters::-webkit-scrollbar, .manage-filters::-webkit-scrollbar { height: 4px; }
-.filters::-webkit-scrollbar-thumb, .manage-filters::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 /* 场景标签行（使用视图，随分类联动） */
 .scene-row { padding-top: 0; padding-bottom: 6px; }
 .scene-row[hidden] { display: none; }
-.scene-row .chip { font-size: 12px; padding: 3px 9px; }
-.scene-row .chip .cnt { opacity: 0.65; margin-left: 3px; font-size: 11px; }
 .chip {
   flex-shrink: 0;
   border: 1px solid var(--border);
@@ -169,6 +164,50 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 /* 纯图标 chip（收藏/最近）：方形、无文字间距 */
 .chip.icon-only { padding: 5px; }
 .chip.icon-only .ic { margin-right: 0; width: 15px; height: 15px; }
+
+/* === 分类 chip：实心药丸，主色调，加粗 —— 突出"大类" === */
+.chip.cat-chip, .m-chip.cat-chip {
+  background: var(--primary-soft);
+  border-color: transparent;
+  color: var(--primary);
+  font-weight: 600;
+}
+.chip.cat-chip:hover, .m-chip.cat-chip:hover {
+  background: var(--primary);
+  color: #fff;
+}
+.chip.cat-chip.active, .m-chip.cat-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.chip.cat-chip.active .cnt, .m-chip.cat-chip.active .cnt { opacity: 0.85; }
+
+/* === 标签 chip：描边轻量，小字，# 前缀 —— "细分场景" === */
+.chip.tag-chip, .m-chip.tag-chip {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-soft);
+  font-weight: 400;
+  font-size: 12px;
+  padding: 3px 9px;
+}
+.chip.tag-chip .hash, .m-chip.tag-chip .hash {
+  color: var(--text-faint);
+  margin-right: 2px;
+}
+.chip.tag-chip:hover, .m-chip.tag-chip:hover {
+  border-color: var(--text-faint);
+  color: var(--text);
+}
+.chip.tag-chip:hover .hash, .m-chip.tag-chip:hover .hash { color: var(--text-soft); }
+.chip.tag-chip.active, .m-chip.tag-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.chip.tag-chip.active .hash, .m-chip.tag-chip.active .hash { color: rgba(255,255,255,0.85); }
+.chip.tag-chip .cnt, .m-chip.tag-chip .cnt { opacity: 0.6; margin-left: 3px; }
 
 /* ---------- 结果列表（使用视图） ---------- */
 .results { flex: 1; overflow-y: auto; padding: 4px 10px 10px; outline: none; }
@@ -268,8 +307,8 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
   user-select: none;
 }
 .chip-row {
-  display: flex; gap: 5px;
-  overflow-x: auto; scrollbar-width: thin;
+  display: flex; flex-wrap: wrap; gap: 5px;
+  flex: 1; min-width: 0;
 }
 /* 管理入口小按钮（分类/标签管理） */
 .manage-tiny-btn {

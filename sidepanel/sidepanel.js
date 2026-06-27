@@ -114,7 +114,7 @@
     elFilters.querySelectorAll('.chip[data-category]').forEach((c) => c.remove());
     state.categories.forEach((c) => {
       const btn = document.createElement('button');
-      btn.className = 'chip';
+      btn.className = 'chip cat-chip';
       btn.dataset.filter = c.id;
       btn.dataset.category = '1';
       btn.textContent = c.name;
@@ -152,8 +152,8 @@
     }
     row.hidden = false;
     row.innerHTML = tags.map((t) =>
-      '<button class="chip scene' + (state.sceneTag === t ? ' active' : '') + '" data-scene="' + escapeHtml(t) + '">' +
-        escapeHtml(t) + '<span class="cnt">' + tagCounts[t] + '</span></button>'
+      '<button class="chip tag-chip' + (state.sceneTag === t ? ' active' : '') + '" data-scene="' + escapeHtml(t) + '">' +
+        '<span class="hash">#</span>' + escapeHtml(t) + '<span class="cnt">' + tagCounts[t] + '</span></button>'
     ).join('');
   }
 
@@ -339,7 +339,7 @@
     row.querySelectorAll('.m-chip[data-mcat]:not([data-mcat="all"])').forEach((c) => c.remove());
     state.categories.forEach((c) => {
       const b = document.createElement('button');
-      b.className = 'm-chip' + (state.mCat === c.id ? ' active' : '');
+      b.className = 'm-chip cat-chip' + (state.mCat === c.id ? ' active' : '');
       b.dataset.mcat = c.id;
       b.innerHTML = escapeHtml(c.name) + ' <span class="cnt">' + (counts[c.id] || 0) + '</span>';
       b.addEventListener('click', () => { state.mCat = c.id; state.mTag = null; renderManageFilters(); refreshManage(); });
@@ -365,8 +365,8 @@
         tagRow.innerHTML = '<span class="no-tag-hint">该分类下暂无标签（可在编辑提示词时添加）</span>';
       } else {
         tagRow.innerHTML = tags.map((t) =>
-          '<button class="m-chip' + (state.mTag === t ? ' active' : '') + '" data-tag="' + escapeHtml(t) + '">' +
-            escapeHtml(t) + '<span class="cnt">' + tagCounts[t] + '</span></button>'
+          '<button class="m-chip tag-chip' + (state.mTag === t ? ' active' : '') + '" data-tag="' + escapeHtml(t) + '">' +
+            '<span class="hash">#</span>' + escapeHtml(t) + '<span class="cnt">' + tagCounts[t] + '</span></button>'
         ).join('');
         tagRow.querySelectorAll('.m-chip').forEach((c) => {
           c.addEventListener('click', () => { state.mTag = state.mTag === c.dataset.tag ? null : c.dataset.tag; renderManageFilters(); refreshManage(); });
