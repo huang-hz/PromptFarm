@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PromptHub - 提示词管理",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "场景化提示词管理：模糊/拼音检索、变量模板、一键复制或插入输入框。支持 Chrome 与 Edge。",
   "minimum_chrome_version": "114",
   "icons": {
