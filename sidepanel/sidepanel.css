@@ -166,6 +166,9 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 }
 .chip:hover { background: var(--bg-hover); color: var(--text); }
 .chip.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+/* 纯图标 chip（收藏/最近）：方形、无文字间距 */
+.chip.icon-only { padding: 5px; }
+.chip.icon-only .ic { margin-right: 0; width: 15px; height: 15px; }
 
 /* ---------- 结果列表（使用视图） ---------- */
 .results { flex: 1; overflow-y: auto; padding: 4px 10px 10px; outline: none; }
