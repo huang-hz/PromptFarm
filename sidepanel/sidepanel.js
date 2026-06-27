@@ -120,7 +120,7 @@
   }
 
   // 使用视图：场景标签行（随分类联动，与管理视图一致）
-  function renderSceneRow() {
+  async function renderSceneRow() {
     const row = $('#scene-row');
     // 仅当选了某个分类时显示场景标签
     const isCategory = state.categories.some((c) => c.id === state.activeFilter);
@@ -129,11 +129,8 @@
       row.innerHTML = '';
       return;
     }
-    const tagCounts = {};
-    state.prompts
-      .filter((p) => p.categoryId === state.activeFilter)
-      .forEach((p) => (p.tags || []).forEach((t) => { tagCounts[t] = (tagCounts[t] || 0) + 1; }));
-    const tags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]);
+    // 用 store 的有序标签（合并手动排序 + 新出现的）
+    const { tags, counts: tagCounts } = await store.getOrderedTagsForCategory(state.activeFilter);
     if (state.sceneTag && tags.indexOf(state.sceneTag) < 0) state.sceneTag = null;
     if (!tags.length) {
       row.hidden = true;
@@ -316,7 +313,7 @@
   }
 
   // ========== 管理视图 ==========
-  function renderManageFilters() {
+  async function renderManageFilters() {
     // 分类 chips
     const row = $('#m-cat-row');
     const counts = {};
@@ -342,11 +339,8 @@
       tagGroup.hidden = true;
       tagRow.innerHTML = '';
     } else {
-      const tagCounts = {};
-      state.prompts
-        .filter((p) => p.categoryId === state.mCat)
-        .forEach((p) => (p.tags || []).forEach((t) => { tagCounts[t] = (tagCounts[t] || 0) + 1; }));
-      const tags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]);
+      // 用 store 的有序标签（合并手动排序 + 新出现的）
+      const { tags, counts: tagCounts } = await store.getOrderedTagsForCategory(state.mCat);
       // 清理失效的标签筛选（保存/删除后该标签可能已不存在）
       if (state.mTag && tags.indexOf(state.mTag) < 0) state.mTag = null;
       tagGroup.hidden = false;
@@ -531,9 +525,10 @@
       return;
     }
     list.innerHTML =
-      '<div class="mgr-hint">共 ' + state.categories.length + ' 个分类。编辑修改名称/图标，删除会把该分类下提示词变为「未分类」。</div>' +
+      '<div class="mgr-hint">共 ' + state.categories.length + ' 个分类。拖动左侧 ≡ 调整顺序，编辑改名，删除会把该分类下提示词变为「未分类」。</div>' +
       state.categories.map((c) =>
-        '<div class="mgr-item" data-cid="' + c.id + '">' +
+        '<div class="mgr-item" data-cid="' + c.id + '" draggable="true">' +
+          '<span class="mgr-handle" title="拖动排序">≡</span>' +
           '<div class="mgr-main"><div class="mgr-name">' + escapeHtml(c.name) + '</div>' +
             '<div class="mgr-sub">' + (counts[c.id] || 0) + ' 条提示词</div></div>' +
           '<div class="mgr-actions">' +
@@ -542,6 +537,7 @@
           '</div>' +
         '</div>'
       ).join('');
+    bindCatmDrag(list);
     list.querySelectorAll('.catm-edit').forEach((b) => b.addEventListener('click', () => openCategoryModal(b.dataset.cid)));
     list.querySelectorAll('.catm-del').forEach((b) => b.addEventListener('click', async () => {
       const c = state.categories.find((x) => x.id === b.dataset.cid);
@@ -563,35 +559,92 @@
     }));
   }
 
+  // 通用拖拽排序：在 container 内的 .mgr-item 之间拖动，松手后按新顺序回调 onReorder(orderedItems[])
+  function bindDragReorder(container, onReorder) {
+    let dragEl = null;
+    container.querySelectorAll('.mgr-item').forEach((item) => {
+      item.addEventListener('dragstart', (e) => {
+        dragEl = item;
+        item.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', ''); } catch (err) {}
+      });
+      item.addEventListener('dragend', () => {
+        item.classList.remove('dragging');
+        container.querySelectorAll('.mgr-item').forEach((it) => it.classList.remove('drag-over'));
+        dragEl = null;
+      });
+      item.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (!dragEl || dragEl === item) return;
+        e.dataTransfer.dropEffect = 'move';
+        container.querySelectorAll('.mgr-item').forEach((it) => it.classList.remove('drag-over'));
+        item.classList.add('drag-over');
+      });
+      item.addEventListener('dragleave', () => { item.classList.remove('drag-over'); });
+      item.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (!dragEl || dragEl === item) return;
+        // 判断插入到目标的前面还是后面
+        const rect = item.getBoundingClientRect();
+        const after = (e.clientY - rect.top) > rect.height / 2;
+        if (after) item.parentNode.insertBefore(dragEl, item.nextSibling);
+        else item.parentNode.insertBefore(dragEl, item);
+        const ordered = Array.from(container.querySelectorAll('.mgr-item')).map((it) => it);
+        onReorder(ordered);
+      });
+    });
+  }
+
+  function bindCatmDrag(container) {
+    bindDragReorder(container, async (orderedItems) => {
+      const orderedIds = orderedItems.map((it) => it.dataset.cid);
+      await store.reorderCategories(orderedIds);
+      state.categories = await store.getCategories(); // 已按新 sortOrder 排好
+      renderCategoryChips();
+      renderManageFilters();
+      renderSceneRow();
+      fillCategorySelect();
+      toast('顺序已保存');
+    });
+  }
+
+  function bindTagmDrag(container) {
+    bindDragReorder(container, async (orderedItems) => {
+      const orderedTags = orderedItems.map((it) => it.dataset.tag);
+      await store.saveTagOrderForCategory(state.mCat, orderedTags);
+      renderManageFilters();
+      renderSceneRow();
+      toast('顺序已保存');
+    });
+  }
+
   // ---------- 标签管理面板（作用于当前分类） ----------
-  function openTagmSheet() {
+  async function openTagmSheet() {
     // 标签是分类下的细分，必须先选定一个分类
     const isCategory = state.categories.some((c) => c.id === state.mCat);
     if (!isCategory) {
       toast('请先在上方选择一个分类，再管理其标签');
       return;
     }
-    renderTagmList();
+    await renderTagmList();
     $('#tagm-sheet').hidden = false;
   }
-  function renderTagmList() {
+  async function renderTagmList() {
     const cat = state.categories.find((c) => c.id === state.mCat);
     $('#tagm-title').textContent = '管理标签 · ' + (cat ? cat.name : '');
-    const tagCounts = {};
-    state.prompts
-      .filter((p) => p.categoryId === state.mCat)
-      .forEach((p) => (p.tags || []).forEach((t) => { tagCounts[t] = (tagCounts[t] || 0) + 1; }));
-    const tags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]);
+    // 用 store 的有序标签（合并手动排序 + 新出现的）
+    const { tags, counts: tagCounts } = await store.getOrderedTagsForCategory(state.mCat);
     const list = $('#tagm-list');
     if (!tags.length) {
       list.innerHTML = '<div class="mgr-empty">该分类下暂无标签<br>标签在编辑提示词时填写，会自动汇总到这里。</div>';
       return;
     }
     list.innerHTML =
-      '<div class="mgr-hint">共 ' + tags.length + ' 个标签（仅作用于当前分类）。重命名/删除会批量更新该分类下的提示词。</div>' +
+      '<div class="mgr-hint">共 ' + tags.length + ' 个标签（仅作用于当前分类）。拖动 ≡ 调整顺序，重命名/删除会批量更新该分类下的提示词。</div>' +
       tags.map((t) =>
-        '<div class="mgr-item" data-tag="' + escapeHtml(t) + '">' +
-          '<span class="mgr-ico">#</span>' +
+        '<div class="mgr-item" data-tag="' + escapeHtml(t) + '" draggable="true">' +
+          '<span class="mgr-handle" title="拖动排序">≡</span>' +
           '<div class="mgr-main"><div class="mgr-name">' + escapeHtml(t) + '</div>' +
             '<div class="mgr-sub">' + tagCounts[t] + ' 条提示词</div></div>' +
           '<div class="mgr-actions">' +
@@ -600,6 +653,7 @@
           '</div>' +
         '</div>'
       ).join('');
+    bindTagmDrag(list);
     list.querySelectorAll('.tagm-rename').forEach((b) => {
       b.addEventListener('click', async () => {
         const old = b.dataset.tag;
@@ -616,7 +670,7 @@
         renderSceneRow();
         refresh();
         refreshManage();
-        renderTagmList();
+        await renderTagmList();
         toast('已重命名，影响 ' + n + ' 条');
       });
     });
@@ -633,7 +687,7 @@
         renderSceneRow();
         refresh();
         refreshManage();
-        renderTagmList();
+        await renderTagmList();
         toast('已删除，影响 ' + cnt + ' 条');
       });
     });
@@ -652,7 +706,7 @@
     renderSceneRow();
     refresh();
     refreshManage();
-    renderTagmList();
+    await renderTagmList();
     toast('已新建标签「' + tagName + '」');
   }
 

@@ -313,7 +313,17 @@ html, body {
   padding: 11px 12px; border: 1px solid var(--border);
   border-radius: var(--radius); margin-bottom: 8px;
   background: var(--bg);
+  transition: border-color 0.12s, box-shadow 0.12s, opacity 0.12s;
 }
+.mgr-item.dragging { opacity: 0.4; }
+.mgr-item.drag-over { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
+.mgr-handle {
+  flex-shrink: 0; cursor: grab; color: var(--text-faint);
+  font-size: 16px; line-height: 1; padding: 2px;
+  user-select: none; touch-action: none;
+}
+.mgr-handle:hover { color: var(--text-soft); }
+.mgr-handle:active { cursor: grabbing; }
 .mgr-item .mgr-main { flex: 1; min-width: 0; }
 .mgr-item .mgr-name { font-weight: 600; font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mgr-item .mgr-sub { font-size: 11.5px; color: var(--text-faint); margin-top: 1px; }
