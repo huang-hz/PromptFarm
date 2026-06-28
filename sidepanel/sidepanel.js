@@ -535,7 +535,9 @@
     const M = PH.models;
     const panel = $('#mp-panel');
     let html = '';
-    M.CATALOG.forEach((co) => {
+    // 按公司名首字母排序
+    const companies = M.CATALOG.slice().sort((a, b) => a.company.localeCompare(b.company, 'en'));
+    companies.forEach((co) => {
       const allIds = co.models.map((m) => M.makeId(co.company, m));
       const checkedCount = allIds.filter((id) => state.editorModels[id]).length;
       const allChecked = checkedCount === allIds.length;
