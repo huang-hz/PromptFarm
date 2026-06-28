@@ -117,10 +117,14 @@
           <input name="tags" placeholder="如：邮件, 商务" />
         </div>
         <div class="field">
-          <label>
-            适配模型 <span class="hint" id="model-count-hint">可选，勾选该提示词适用的模型</span>
-          </label>
-          <div class="model-picker" id="model-picker"></div>
+          <label>适配模型</label>
+          <div class="mp-dropdown" id="mp-dropdown">
+            <button type="button" class="mp-trigger" id="mp-trigger">
+              <span id="mp-trigger-label">未选择</span>
+              <svg class="ic"><use href="#ic-expand"/></svg>
+            </button>
+            <div class="mp-panel" id="mp-panel" hidden></div>
+          </div>
         </div>
         <div class="field">
           <label>

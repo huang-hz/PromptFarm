@@ -516,7 +516,7 @@
     // 初始化模型选中状态
     state.editorModels = {};
     (p && p.models ? p.models : []).forEach((id) => { state.editorModels[id] = true; });
-    renderModelPicker();
+    renderModelPanel();
     updateVarPreview();
     $('#editor-sheet').hidden = false;
     setTimeout(() => form.title.focus(), 50);
@@ -528,14 +528,14 @@
       state.categories.map((c) => '<option value="' + c.id + '">' + escapeHtml(c.name) + '</option>').join('');
   }
 
-  // ---------- 模型多选器 ----------
+  // ---------- 模型多选下拉框 ----------
   // state.editorModels: { [modelId]: true } 当前编辑器选中的模型集合
-  function renderModelPicker() {
+  // 渲染下拉面板内容（区域 > 供应商(一级,可全选) > 模型(二级)）
+  function renderModelPanel() {
     const M = PH.models;
-    const picker = $('#model-picker');
-    const regions = ['us', 'cn'];
+    const panel = $('#mp-panel');
     let html = '';
-    regions.forEach((region) => {
+    ['us', 'cn'].forEach((region) => {
       const companies = M.companiesInRegion(region);
       if (!companies.length) return;
       html += '<div class="mp-region"><div class="mp-region-label">' + M.REGION_LABEL[region] + '</div>';
@@ -543,12 +543,20 @@
         const allIds = co.models.map((m) => M.makeId(co.company, m));
         const checkedCount = allIds.filter((id) => state.editorModels[id]).length;
         const allChecked = checkedCount === allIds.length;
+        const partial = checkedCount > 0 && !allChecked;
         html += '<div class="mp-company">';
-        html += '<label class="mp-company-head">';
-        html += '<input type="checkbox" class="mp-company-all" data-company="' + escapeHtml(co.company) + '"' + (allChecked ? ' checked' : '') + ' />';
-        html += '<span>' + escapeHtml(co.company) + (checkedCount > 0 && !allChecked ? ' (' + checkedCount + '/' + allIds.length + ')' : '') + '</span>';
-        html += '</label>';
-        html += '<div class="mp-models">';
+        // 一级：供应商（带全选 + 折叠展开）
+        html += '<div class="mp-company-head">';
+        html += '<input type="checkbox" class="mp-company-all" data-company="' + escapeHtml(co.company) + '"' +
+          (allChecked ? ' checked' : '') + (partial ? ' data-partial="1"' : '') + ' />';
+        html += '<span class="mp-company-toggle" data-company="' + escapeHtml(co.company) + '">' +
+          icon('expand') + escapeHtml(co.company) +
+          (partial ? ' <em class="mp-partial">' + checkedCount + '/' + allIds.length + '</em>' :
+           (checkedCount > 0 ? ' <em class="mp-partial">✓</em>' : '')) + '</span>';
+        html += '</div>';
+        // 二级：模型列表（默认折叠，有选中时展开）
+        const expanded = checkedCount > 0;
+        html += '<div class="mp-models' + (expanded ? ' open' : '') + '">';
         co.models.forEach((m) => {
           const id = M.makeId(co.company, m);
           const on = !!state.editorModels[id];
@@ -560,13 +568,24 @@
       });
       html += '</div>';
     });
-    picker.innerHTML = html;
-    updateModelCount();
+    panel.innerHTML = html;
+    updateModelTrigger();
+  }
+
+  // 更新触发按钮显示：已选数量或前几个模型名
+  function updateModelTrigger() {
+    const ids = collectEditorModels();
+    const label = $('#mp-trigger-label');
+    if (!ids.length) { label.textContent = '未选择（可选）'; return; }
+    const M = PH.models;
+    const names = ids.map((id) => M.parseId(id).model);
+    if (ids.length <= 2) label.textContent = names.join('、');
+    else label.textContent = names.slice(0, 2).join('、') + ' +' + (ids.length - 2);
   }
 
   function updateModelCount() {
-    const n = Object.keys(state.editorModels).filter((k) => state.editorModels[k]).length;
-    $('#model-count-hint').textContent = n > 0 ? ('已选 ' + n + ' 个') : '可选，勾选该提示词适用的模型';
+    // 保留兼容（旧引用），下拉版用 updateModelTrigger
+    updateModelTrigger();
   }
 
   // 把当前编辑器的选中模型收集为数组
@@ -974,24 +993,50 @@
   $('#prompt-form').content.addEventListener('input', updateVarPreview);
   $('#add-category').addEventListener('click', () => openCategoryModal(null));
 
-  // 模型多选器：勾选交互（事件委托，因每次 openEditor 都重渲染）
-  $('#model-picker').addEventListener('change', (e) => {
+  // 模型下拉框：触发器开关 + 面板内勾选 + 折叠
+  $('#mp-trigger').addEventListener('click', () => {
+    const panel = $('#mp-panel');
+    const open = panel.hidden;
+    panel.hidden = !open;
+    $('#mp-trigger').classList.toggle('open', open);
+  });
+  // 点击外部关闭下拉
+  document.addEventListener('click', (e) => {
+    const dd = $('#mp-dropdown');
+    if (!dd.hidden !== undefined && !$('#mp-panel').hidden && !dd.contains(e.target)) {
+      $('#mp-panel').hidden = true;
+      $('#mp-trigger').classList.remove('open');
+    }
+  });
+  // 面板内交互（事件委托）
+  $('#mp-panel').addEventListener('click', (e) => {
+    // 折叠/展开某公司
+    const toggle = e.target.closest('.mp-company-toggle');
+    if (toggle) {
+      const models = toggle.parentElement.nextElementSibling;
+      if (models) models.classList.toggle('open');
+      return;
+    }
+  });
+  $('#mp-panel').addEventListener('change', (e) => {
     const t = e.target;
-    // 公司全选
+    // 一级：公司全选
     if (t.classList.contains('mp-company-all')) {
       const co = t.dataset.company;
-      PH.models.idsOfCompany(co).forEach((id) => { state.editorModels[id] = t.checked; });
-      if (!t.checked) {
-        // 取消时清理（避免 editorModels 留 false 项干扰计数）
-        PH.models.idsOfCompany(co).forEach((id) => { delete state.editorModels[id]; });
-      }
+      PH.models.idsOfCompany(co).forEach((id) => {
+        if (t.checked) state.editorModels[id] = true;
+        else delete state.editorModels[id];
+      });
+      renderModelPanel();   // 重渲染更新二级勾选态
+      return;
     }
-    // 单个模型
+    // 二级：单个模型
     if (t.classList.contains('mp-model-cb')) {
       if (t.checked) state.editorModels[t.dataset.id] = true;
       else delete state.editorModels[t.dataset.id];
+      renderModelPanel();   // 重渲染更新一级全选态/计数
+      return;
     }
-    renderModelPicker();   // 重渲染以更新公司勾选态/计数
   });
 
   // 分类弹层
