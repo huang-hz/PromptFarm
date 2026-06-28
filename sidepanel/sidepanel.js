@@ -220,17 +220,29 @@
   function icon(name, cls) {
     return '<svg class="ic' + (cls ? ' ' + cls : '') + '"><use href="#ic-' + name + '"/></svg>';
   }
-  // 模型徽章：把 models[] 渲染为小标签，最多显示 2 个 + 溢出计数
-  function modelBadges(models, max) {
+  // 模型徽章：把 models[] 渲染为小标签
+  // max: 紧凑态最多显示几个；expandable: 是否支持悬浮展开全部（使用视图用）
+  function modelBadges(models, max, expandable) {
     max = max || 2;
     if (!models || !models.length) return '';
     const M = PH.models;
-    const shown = models.slice(0, max).map((id) => {
+    const compact = models.slice(0, max).map((id) => {
       const { model } = M.parseId(id);
       return '<span class="mbadge">' + escapeHtml(model) + '</span>';
     }).join('');
     const extra = models.length > max ? '<span class="mbadge mbadge-more">+' + (models.length - max) + '</span>' : '';
-    return '<span class="mbadges">' + shown + extra + '</span>';
+
+    // 非展开：单层紧凑
+    if (!expandable) {
+      return '<span class="mbadges">' + compact + extra + '</span>';
+    }
+    // 展开模式：默认显示紧凑，悬浮时显示全部并自动换行
+    const allHtml = models.map((id) => {
+      const { company, model } = M.parseId(id);
+      return '<span class="mbadge" title="' + escapeHtml(company) + '">' + escapeHtml(model) + '</span>';
+    }).join('');
+    return '<span class="mbadges mbadges-compact">' + compact + extra + '</span>' +
+      '<span class="mbadges mbadges-all">' + allHtml + '</span>';
   }
   function highlight(text, q) {
     if (!q) return escapeHtml(text);
@@ -265,7 +277,7 @@
         '</div>' +
         (p.description ? '<div class="result-desc">' + escapeHtml(p.description) + '</div>' : '') +
         (tags ? '<div class="result-tags">' + tags + '</div>' : '') +
-        (p.models && p.models.length ? '<div class="result-models">' + modelBadges(p.models) + '</div>' : '') +
+        (p.models && p.models.length ? '<div class="result-models">' + modelBadges(p.models, 2, true) + '</div>' : '') +
         '<div class="result-meta">' + (hasVar ? '<span>' + icon('variable') + ' 含变量</span>' : '') + (p.usageCount ? '<span>用 ' + p.usageCount + ' 次</span>' : '') + '</div>' +
         '<div class="result-actions">' +
           '<button class="mini-btn act-copy">' + icon('copy') + ' 复制</button>' +

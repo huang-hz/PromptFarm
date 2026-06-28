@@ -471,7 +471,14 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
   font-family: var(--mono); white-space: nowrap;
 }
 .mbadge-more { background: transparent; border-style: dashed; color: var(--text-faint); }
+
+/* 使用视图：悬浮展开全部模型，按面板宽度自动换行 */
 .result-models { margin-top: 5px; }
+.mbadges-compact { display: inline-flex; }
+.mbadges-all { display: none; }
+.result-item:hover .mbadges-compact { display: none; }
+.result-item:hover .mbadges-all { display: flex; flex-wrap: wrap; gap: 4px; }
+
 .m-models { margin-top: 5px; }
 
 .sheet-foot { padding: 12px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
