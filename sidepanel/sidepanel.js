@@ -25,6 +25,7 @@
     tagExpanded: false,
     // 详情页
     editingId: null,             // 当前详情页的提示词 id（null=新建）
+    currentPrompt: null,         // 当前详情页的源提示词对象（供副本等操作引用）
     detailMode: 'edit',          // edit | preview
     editorModels: {},            // { [modelId]: true }
     // 分类/标签管理
@@ -213,6 +214,48 @@
     return '<span class="mbadges mbadges-compact">' + compact + extra + '</span>' +
       '<span class="mbadges mbadges-all">' + allHtml + '</span>';
   }
+  // 自定义确认弹层（替换原生 confirm），返回 Promise<boolean>
+  function showConfirm(message, opts) {
+    opts = opts || {};
+    return new Promise((resolve) => {
+      const ov = $('#confirm-overlay');
+      $('#confirm-title').textContent = opts.title || '确认';
+      $('#confirm-msg').textContent = message;
+      const okBtn = $('#confirm-ok');
+      okBtn.className = 'btn ' + (opts.danger === false ? 'primary' : 'danger');
+      okBtn.textContent = opts.okText || '确定';
+      const cancel = $('#confirm-cancel');
+      const done = (v) => { ov.hidden = true; okBtn.onclick = cancel.onclick = null; state._confirmResolve = null; resolve(v); };
+      okBtn.onclick = () => done(true);
+      cancel.onclick = () => done(false);
+      state._confirmResolve = () => done(false);   // 供点遮罩/Esc 调用
+      ov.hidden = false;
+      setTimeout(() => okBtn.focus(), 30);
+    });
+  }
+  // 自定义输入弹层（替换原生 prompt），返回 Promise<string|null>
+  function showPrompt(message, defaultValue, opts) {
+    opts = opts || {};
+    return new Promise((resolve) => {
+      const ov = $('#prompt-overlay');
+      $('#prompt-title').textContent = opts.title || '输入';
+      $('#prompt-msg').textContent = message;
+      const inp = $('#prompt-input');
+      inp.value = defaultValue || '';
+      inp.placeholder = opts.placeholder || '';
+      const ok = $('#prompt-ok');
+      const cancel = $('#prompt-cancel');
+      const close = $('#prompt-close');
+      const done = (v) => { ov.hidden = true; ok.onclick = cancel.onclick = close.onclick = null; inp.onkeydown = null; state._promptResolve = null; resolve(v); };
+      ok.onclick = () => done(inp.value);
+      cancel.onclick = () => done(null);
+      close.onclick = () => done(null);
+      inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); done(inp.value); } };
+      state._promptResolve = () => done(null);   // 供点遮罩/Esc 调用
+      ov.hidden = false;
+      setTimeout(() => { inp.focus(); inp.select(); }, 30);
+    });
+  }
   function highlight(text, q) {
     if (!q) return escapeHtml(text);
     const lower = String(text).toLowerCase();
@@ -244,18 +287,22 @@
       const cat = catMap[p.categoryId];
       const tags = (p.tags || []).slice(0, 4).map((t) => '<span class="tag">' + escapeHtml(t) + '</span>').join('');
       const hasVar = template.hasVariables(p.content);
+      // 简短描述为空时，回退展示提示词内容前两行（同样被 line-clamp 截断为 …）
+      const descText = (p.description && p.description.trim()) ? p.description : (p.content || '');
+      const descClass = (p.description && p.description.trim()) ? 'result-desc' : 'result-desc result-desc-fallback';
       return '<div class="result-item' + (i === state.selectedIndex ? ' selected' : '') + '" data-idx="' + i + '" data-id="' + p.id + '">' +
         '<div class="result-head">' +
           '<span class="result-title">' + highlight(p.title, state.query) + '</span>' +
           (p.favorite ? '<span class="result-star">' + icon('star-fill') + '</span>' : '') +
         '</div>' +
-        (p.description ? '<div class="result-desc">' + escapeHtml(p.description) + '</div>' : '') +
+        (descText ? '<div class="' + descClass + '">' + escapeHtml(descText) + '</div>' : '') +
         (tags ? '<div class="result-tags">' + tags + '</div>' : '') +
         (p.models && p.models.length ? '<div class="result-models">' + modelBadges(p.models, 2, true) + '</div>' : '') +
         '<div class="result-meta">' + (hasVar ? '<span>' + icon('variable') + ' 含变量</span>' : '') + (p.usageCount ? '<span>用 ' + p.usageCount + ' 次</span>' : '') + '</div>' +
         '<div class="result-actions">' +
           '<button class="mini-btn act-copy">' + icon('copy') + ' 复制</button>' +
           '<button class="mini-btn act-insert">' + icon('insert') + ' 插入</button>' +
+          '<button class="mini-btn act-dup" title="创建副本">' + icon('duplicate') + ' 副本</button>' +
           '<button class="mini-btn act-fav">' + (p.favorite ? '取消收藏' : icon('star') + ' 收藏') + '</button>' +
         '</div>' +
       '</div>';
@@ -272,6 +319,7 @@
       });
       item.querySelector('.act-copy').addEventListener('click', (e) => { e.stopPropagation(); usePrompt(state.results[idx], 'copy'); });
       item.querySelector('.act-insert').addEventListener('click', (e) => { e.stopPropagation(); usePrompt(state.results[idx], 'insert'); });
+      item.querySelector('.act-dup').addEventListener('click', (e) => { e.stopPropagation(); duplicatePrompt(state.results[idx]); });
       item.querySelector('.act-fav').addEventListener('click', (e) => { e.stopPropagation(); toggleFav(state.results[idx]); });
     });
   }
@@ -309,10 +357,29 @@
     refresh();
     toast(fav ? '已收藏' : '已取消收藏');
   }
+  // 创建副本：取源提示词内容字段，剥掉 id → store 走新建分支
+  // 故意不复制 favorite/usageCount/lastUsed/createdAt：副本是全新记录
+  async function duplicatePrompt(prompt) {
+    if (!prompt) return;
+    await store.savePrompt({
+      title: (prompt.title || '未命名') + '（副本）',
+      description: prompt.description || '',
+      categoryId: prompt.categoryId || null,
+      tags: (prompt.tags || []).slice(),
+      models: (prompt.models || []).slice(),
+      content: prompt.content || ''
+    });
+    state.prompts = await store.getPrompts();
+    renderCategoryChips();
+    renderSceneRow();
+    refresh();
+    toast('已创建副本');
+  }
 
   // ========== 详情页（预览/编辑） ==========
   function openDetail(prompt) {
     state.editingId = prompt ? prompt.id : null;
+    state.currentPrompt = prompt || null;   // 供「创建副本」按钮引用源提示词
     state.detailMode = 'edit';   // 默认编辑模式
     fillCategorySelect();
     const p = prompt;
@@ -328,6 +395,7 @@
     updateVarPreview();
     $('#detail-title').textContent = p ? p.title : '新建提示词';
     $('#detail-delete').hidden = !p;
+    $('#detail-duplicate').hidden = !p;     // 仅编辑已有提示词时可创建副本
     renderDetailPreview(p);
     applyDetailMode();
     $('#detail-sheet').hidden = false;
@@ -336,6 +404,7 @@
   function closeDetail() {
     $('#detail-sheet').hidden = true;
     state.editingId = null;
+    state.currentPrompt = null;
   }
   function applyDetailMode() {
     const isEdit = state.detailMode === 'edit';
@@ -422,7 +491,7 @@
   }
   async function deleteCurrent() {
     if (!state.editingId) return;
-    if (!confirm('确定删除该提示词？此操作不可撤销。')) return;
+    if (!await showConfirm('确定删除该提示词？此操作不可撤销。')) return;
     await store.deletePrompt(state.editingId);
     state.prompts = await store.getPrompts();
     closeDetail();
@@ -525,7 +594,8 @@
     list.querySelectorAll('.catm-del').forEach((b) => b.addEventListener('click', async () => {
       const c = state.categories.find((x) => x.id === b.dataset.cid);
       const n = counts[b.dataset.cid] || 0;
-      if (!confirm('确定删除分类「' + (c ? c.name : '') + '」？' + (n ? '其下 ' + n + ' 条提示词将变为未分类。' : ''))) return;
+      const msg = '确定删除分类「' + (c ? c.name : '') + '」？' + (n ? '\n其下 ' + n + ' 条提示词将变为未分类。' : '');
+      if (!await showConfirm(msg)) return;
       await store.deleteCategory(b.dataset.cid);
       state.categories = await store.getCategories();
       state.prompts = await store.getPrompts();
@@ -568,7 +638,7 @@
     list.querySelectorAll('.tagm-rename').forEach((b) => {
       b.addEventListener('click', async () => {
         const old = b.dataset.tag;
-        const next = prompt('将标签「' + old + '」重命名为：', old);
+        const next = await showPrompt('将标签「' + old + '」重命名为：', old);
         if (next == null) return;
         const newName = String(next).trim();
         if (!newName) { toast('标签名不能为空'); return; }
@@ -586,7 +656,7 @@
       b.addEventListener('click', async () => {
         const t = b.dataset.tag;
         const n = tagCounts[t];
-        if (!confirm('确定删除标签「' + t + '」？将从该分类下 ' + n + ' 条提示词中移除（不删除提示词本身）。')) return;
+        if (!await showConfirm('确定删除标签「' + t + '」？\n将从该分类下 ' + n + ' 条提示词中移除（不删除提示词本身）。')) return;
         const cnt = await store.deleteTagInCategory(state.activeFilter, t);
         state.prompts = await store.getPrompts();
         if (state.sceneTag === t) state.sceneTag = null;
@@ -859,6 +929,7 @@
   // 详情页
   $('#detail-back').addEventListener('click', closeDetail);
   $('#detail-delete').addEventListener('click', deleteCurrent);
+  $('#detail-duplicate').addEventListener('click', () => duplicatePrompt(state.currentPrompt));
   $('#detail-save').addEventListener('click', savePromptFromForm);
   $('#prompt-form').content.addEventListener('input', updateVarPreview);
   $('#add-category').addEventListener('click', () => openCategoryModal(null));
@@ -910,9 +981,13 @@
   $('#catm-add').addEventListener('click', () => openCategoryModal(null));
   // 标签管理面板
   $('#tagm-back').addEventListener('click', () => { $('#tagm-sheet').hidden = true; });
-  $('#tagm-add').addEventListener('click', () => {
+  $('#tagm-add').addEventListener('click', async () => {
     const cat = state.categories.find((c) => c.id === state.activeFilter);
-    const name = prompt('在分类「' + (cat ? cat.name : '') + '」下新建标签：标签需关联到提示词。\n\n请输入标签名，将添加到该分类下第一条提示词：');
+    const name = await showPrompt(
+      '在分类「' + (cat ? cat.name : '') + '」下新建标签：\n标签需关联到提示词，将添加到该分类下第一条提示词。',
+      '',
+      { title: '新建标签', placeholder: '请输入标签名' }
+    );
     if (name == null) return;
     const t = String(name).trim();
     if (!t) { toast('标签名不能为空'); return; }
@@ -924,9 +999,13 @@
   $('#cat-cancel').addEventListener('click', () => { $('#cat-overlay').hidden = true; });
   $('#cat-save').addEventListener('click', saveCategory);
   $('#cat-overlay').addEventListener('click', (e) => { if (e.target === $('#cat-overlay')) $('#cat-overlay').hidden = true; });
+  // 确认/输入弹层：点遮罩空白处取消
+  $('#confirm-overlay').addEventListener('click', (e) => { if (e.target === $('#confirm-overlay') && state._confirmResolve) state._confirmResolve(); });
+  $('#prompt-overlay').addEventListener('click', (e) => { if (e.target === $('#prompt-overlay') && state._promptResolve) state._promptResolve(); });
 
   // 设置面板
   $('#settings-back').addEventListener('click', closeSettingsSheet);
+  $('#settings-save').addEventListener('click', saveDisplaySettings);
   bindSettingPair('#set-cat-range', '#set-cat-count');
   bindSettingPair('#set-tag-range', '#set-tag-count');
 
@@ -967,6 +1046,8 @@
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); savePromptFromForm(); return; }
     }
     if (e.key === 'Escape') {
+      if (!$('#confirm-overlay').hidden) { if (state._confirmResolve) state._confirmResolve(); return; }
+      if (!$('#prompt-overlay').hidden) { if (state._promptResolve) state._promptResolve(); return; }
       if (!$('#detail-sheet').hidden) { closeDetail(); return; }
       if (!$('#catm-sheet').hidden) { $('#catm-sheet').hidden = true; return; }
       if (!$('#tagm-sheet').hidden) { $('#tagm-sheet').hidden = true; return; }

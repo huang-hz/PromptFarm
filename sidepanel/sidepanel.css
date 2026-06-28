@@ -156,9 +156,10 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 .view[hidden] { display: none; }
 
 /* ---------- 搜索框（使用视图） ---------- */
-.search-wrap { position: relative; padding: 0 14px 8px; flex-shrink: 0; }
+.search-wrap { display: flex; align-items: center; gap: 6px; padding: 0 14px 8px; flex-shrink: 0; }
+.search-field { position: relative; flex: 1; min-width: 0; }
 .search-icon {
-  position: absolute; left: 26px; top: 50%;
+  position: absolute; left: 12px; top: 50%;
   transform: translateY(-50%);
   color: var(--text-faint); pointer-events: none;
 }
@@ -173,13 +174,14 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 }
 #search:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); background: var(--bg); }
 .clear-btn {
-  position: absolute; right: 22px; top: 50%;
+  position: absolute; right: 10px; top: 50%;
   transform: translateY(-50%);
   border: none; background: var(--text-faint); color: #fff;
   width: 18px; height: 18px; border-radius: 50%;
-  cursor: pointer; font-size: 11px; line-height: 1;
+  cursor: pointer; line-height: 1;
   display: flex; align-items: center; justify-content: center;
 }
+.clear-btn .ic { margin: 0; vertical-align: baseline; }
 .clear-btn:hover { background: var(--text-soft); }
 
 /* ---------- 筛选 chips ---------- */
@@ -281,13 +283,15 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
   overflow: hidden; text-overflow: ellipsis;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
+/* 无简短描述时回退展示提示词内容，颜色更淡以示区别 */
+.result-desc-fallback { color: var(--text-faint); }
 .result-tags { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
 .tag {
   font-size: 11px; background: var(--bg-soft); border: 1px solid var(--border);
   color: var(--text-soft); padding: 1px 7px; border-radius: 999px;
 }
 .result-meta { font-size: 11px; color: var(--text-faint); margin-top: 5px; display: flex; gap: 10px; }
-.result-actions { display: flex; gap: 6px; margin-top: 8px; opacity: 0; transition: opacity 0.12s; }
+.result-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; opacity: 0; transition: opacity 0.12s; }
 .result-item:hover .result-actions, .result-item.selected .result-actions { opacity: 1; }
 .mini-btn {
   border: 1px solid var(--border); background: var(--bg); color: var(--text-soft);
@@ -534,6 +538,8 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 .seg.active { background: var(--primary); color: #fff; font-weight: 600; }
 .btn.primary { background: var(--primary); color: #fff; }
 .btn.primary:hover { filter: brightness(1.08); }
+.btn.danger { background: var(--danger); color: #fff; }
+.btn.danger:hover { filter: brightness(1.08); }
 .btn.ghost { background: var(--bg-soft); color: var(--text); border: 1px solid var(--border); }
 .btn.ghost:hover { background: var(--bg-hover); }
 .btn:active { transform: scale(0.98); }
@@ -561,6 +567,9 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 .modal-body { padding: 14px 16px; overflow-y: auto; flex: 1; }
 .modal-actions { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--border); }
 .modal-actions .btn { flex: 1; }
+/* 确认/输入弹层正文 */
+.confirm-msg { font-size: 13.5px; color: var(--text-soft); line-height: 1.6; white-space: pre-line; }
+#prompt-overlay .confirm-msg { margin-bottom: 12px; }
 .import-info { font-size: 13px; color: var(--text-soft); margin-bottom: 12px; }
 
 .var-field { margin-bottom: 12px; }
