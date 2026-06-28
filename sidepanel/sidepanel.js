@@ -107,7 +107,7 @@
     const cats = showAll ? state.categories : state.categories.slice(0, limit);
     cats.forEach((c) => {
       const btn = document.createElement('button');
-      btn.className = 'chip cat-chip';
+      btn.className = 'chip cat-chip' + (state.activeFilter === c.id ? ' active' : '');
       btn.dataset.filter = c.id;
       btn.dataset.category = '1';
       btn.textContent = c.name;
