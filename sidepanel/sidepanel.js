@@ -1,6 +1,5 @@
-/* sidepanel.js — 单页双视图主逻辑
- * 视图：use（搜索+使用） / manage（增删改查） + 全屏编辑器。
- * 逻辑层复用 PH.store / PH.search / PH.template。
+/* sidepanel.js — 单页架构：主列表 + 提示词详情页（预览/编辑双模式）
+ * 逻辑层复用 PH.store / PH.search / PH.template / PH.models。
  */
 (function () {
   'use strict';
@@ -17,26 +16,19 @@
     prompts: [],
     categories: [],
     settings: {},
-    view: 'use',                 // use | manage
-    // 使用视图
+    // 列表筛选
     query: '',
-    activeFilter: 'all',
-    sceneTag: null,              // null | 标签名（使用视图：某分类下的场景筛选）
+    activeFilter: 'all',         // all | favorite | recent | <categoryId>
+    sceneTag: null,              // null | 标签名
     selectedIndex: 0,
-    catExpanded: false,          // 使用视图：分类是否展开（显示全部）
-    tagExpanded: false,          // 使用视图：标签是否展开（显示全部）
-    results: [],
-    pendingPrompt: null,
-    pendingAction: null,
-    // 管理视图
-    mQuery: '',
-    mCat: 'all',                 // all | <categoryId>
-    mTag: null,                  // null | 标签名（仅在某分类下有效）
-    // 编辑器
-    editingId: null,
+    catExpanded: false,
+    tagExpanded: false,
+    // 详情页
+    editingId: null,             // 当前详情页的提示词 id（null=新建）
+    detailMode: 'edit',          // edit | preview
+    editorModels: {},            // { [modelId]: true }
+    // 分类/标签管理
     editingCategoryId: null,
-    editorModels: {},             // { [modelId]: true } 当前选中的模型
-    // 导入
     pendingImport: null
   };
 
@@ -55,43 +47,38 @@
     try {
       const res = await fetch(chrome.runtime.getURL('sidepanel/icons.html'));
       host.innerHTML = await res.text();
-    } catch (e) {
-      console.warn('loadIcons failed:', e && e.message);
-    }
+    } catch (e) { console.warn('loadIcons failed:', e && e.message); }
   }
 
   // ---------- 初始化 ----------
   async function init() {
-    await loadIcons();                       // 先注入图标 sprite
+    await loadIcons();
     await store.ensureInit(PH.seed);
     state.settings = await store.getSettings();
     state.categories = await store.getCategories();
     state.prompts = await store.getPrompts();
     applyTheme();
     renderCategoryChips();
-    renderManageFilters();
     renderSceneRow();
     refresh();
-    refreshManage();
     elSearch.focus();
 
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local') return;
       let needRefresh = false;
       if (changes[store.KEYS.prompts]) { state.prompts = changes[store.KEYS.prompts].newValue || []; needRefresh = true; }
-      if (changes[store.KEYS.categories]) { state.categories = changes[store.KEYS.categories].newValue || []; renderCategoryChips(); renderManageFilters(); renderSceneRow(); needRefresh = true; }
+      if (changes[store.KEYS.categories]) { state.categories = changes[store.KEYS.categories].newValue || []; renderCategoryChips(); renderSceneRow(); needRefresh = true; }
       if (changes[store.KEYS.settings]) {
         state.settings = Object.assign(state.settings, changes[store.KEYS.settings].newValue);
         applyTheme();
         renderCategoryChips();
         renderSceneRow();
       }
-      if (needRefresh) { renderSceneRow(); refresh(); refreshManage(); }
+      if (needRefresh) { renderSceneRow(); refresh(); }
     });
 
     chrome.runtime.onMessage.addListener((msg) => {
       if (msg && msg.type === 'search-query' && msg.query) {
-        switchView('use');
         elSearch.value = msg.query;
         state.query = msg.query;
         state.selectedIndex = 0;
@@ -101,36 +88,23 @@
     });
   }
 
-  // ---------- 视图切换 ----------
-  function switchView(view) {
-    state.view = view;
-    $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === view));
-    $('#view-use').hidden = view !== 'use';
-    $('#view-manage').hidden = view !== 'manage';
-    if (view === 'use') { elSearch.focus(); refresh(); }
-    else { renderManageFilters(); refreshManage(); }
-  }
-
   // ---------- 主题 ----------
-  // 通过 body class 切换（theme-dark/theme-light），手动选择立即生效
   function applyTheme() {
     const t = state.settings.theme || 'auto';
     document.body.classList.remove('theme-dark', 'theme-light');
     if (t === 'dark') document.body.classList.add('theme-dark');
     else if (t === 'light') document.body.classList.add('theme-light');
-    // auto：不加 class，交给 CSS 媒体查询跟随系统
     const dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
     document.body.style.colorScheme = dark ? 'dark' : 'light';
   }
 
-  // ========== 使用视图 ==========
+  // ========== 列表筛选区 ==========
   function renderCategoryChips() {
     elFilters.querySelectorAll('.chip[data-category], .chip.expand-btn').forEach((c) => c.remove());
-    const all = state.categories;
-    const limit = state.settings.displayCatCount || 0;   // 0 = 全部
-    const needCollapse = limit > 0 && all.length > limit; // 只有超出限制才需要收起
+    const limit = state.settings.displayCatCount || 0;
+    const needCollapse = limit > 0 && state.categories.length > limit;
     const showAll = !needCollapse || state.catExpanded;
-    const cats = showAll ? all : all.slice(0, limit);
+    const cats = showAll ? state.categories : state.categories.slice(0, limit);
     cats.forEach((c) => {
       const btn = document.createElement('button');
       btn.className = 'chip cat-chip';
@@ -140,94 +114,83 @@
       btn.addEventListener('click', () => selectFilter(c.id));
       elFilters.appendChild(btn);
     });
-    // 追加展开/收起按钮
     if (needCollapse) {
       const t = document.createElement('button');
       t.className = 'chip expand-btn';
       const expanded = state.catExpanded;
-      t.title = expanded ? '收起' : ('展开（还有 ' + (all.length - limit) + ' 个）');
+      t.title = expanded ? '收起' : ('展开（还有 ' + (state.categories.length - limit) + ' 个）');
       t.innerHTML = icon(expanded ? 'collapse' : 'expand');
       t.addEventListener('click', () => { state.catExpanded = !state.catExpanded; renderCategoryChips(); });
       elFilters.appendChild(t);
     }
+    // 分类管理入口（放在筛选区末尾）
+    const mgr = document.createElement('button');
+    mgr.className = 'manage-tiny-btn';
+    mgr.innerHTML = icon('gear') + ' 管理分类';
+    mgr.title = '管理分类（增删改）';
+    mgr.addEventListener('click', openCatmSheet);
+    elFilters.appendChild(mgr);
   }
 
   function selectFilter(filter) {
     state.activeFilter = filter;
     state.sceneTag = null;
-    state.tagExpanded = false;   // 切换分类时收起标签（各分类标签数不同）
+    state.tagExpanded = false;
     elFilters.querySelectorAll('.chip').forEach((c) => c.classList.toggle('active', c.dataset.filter === filter));
     renderSceneRow();
     state.selectedIndex = 0;
     refresh();
   }
 
-  // 使用视图：场景标签行（随分类联动，与管理视图一致）
+  // 场景标签行（随分类联动）
   async function renderSceneRow() {
     const row = $('#scene-row');
-    // 仅当选了某个分类时显示场景标签
     const isCategory = state.categories.some((c) => c.id === state.activeFilter);
-    if (!isCategory) {
-      row.hidden = true;
-      row.innerHTML = '';
-      return;
-    }
-    // 用 store 的有序标签（合并手动排序 + 新出现的）
+    if (!isCategory) { row.hidden = true; row.innerHTML = ''; return; }
     const { tags, counts: tagCounts } = await store.getOrderedTagsForCategory(state.activeFilter);
     if (state.sceneTag && tags.indexOf(state.sceneTag) < 0) state.sceneTag = null;
-    if (!tags.length) {
-      row.hidden = true;
-      row.innerHTML = '';
-      return;
-    }
-    // 按设置截取，但保证当前选中的标签始终可见
-    const limit = state.settings.displayTagCount || 0;   // 0 = 全部
-    const needCollapse = limit > 0 && tags.length > limit; // 只有超出限制才需要收起
+    if (!tags.length) { row.hidden = true; row.innerHTML = ''; return; }
+    const limit = state.settings.displayTagCount || 0;
+    const needCollapse = limit > 0 && tags.length > limit;
     const showAll = !needCollapse || state.tagExpanded;
     let shown = showAll ? tags.slice() : tags.slice(0, limit);
-    // 收起态下，保证当前选中的标签可见（即使它不在前 limit 个）
     if (!showAll && state.sceneTag && shown.indexOf(state.sceneTag) < 0) shown.push(state.sceneTag);
     row.hidden = false;
     let html = shown.map((t) =>
       '<button class="chip tag-chip' + (state.sceneTag === t ? ' active' : '') + '" data-scene="' + escapeHtml(t) + '">' +
         escapeHtml(t) + '<span class="cnt">' + tagCounts[t] + '</span></button>'
     ).join('');
-    // 追加展开/收起按钮
     if (needCollapse) {
       const expanded = state.tagExpanded;
-      const t = expanded ? '收起' : ('展开（还有 ' + (tags.length - limit) + ' 个）');
-      html += '<button class="chip expand-btn" title="' + escapeHtml(t) + '">' + icon(expanded ? 'collapse' : 'expand') + '</button>';
+      const tt = expanded ? '收起' : ('展开（还有 ' + (tags.length - limit) + ' 个）');
+      html += '<button class="chip expand-btn" title="' + escapeHtml(tt) + '">' + icon(expanded ? 'collapse' : 'expand') + '</button>';
     }
+    // 标签管理入口
+    html += '<button class="manage-tiny-btn" id="btn-manage-tag-inline">' + icon('gear') + ' 管理标签</button>';
     row.innerHTML = html;
-    // 绑定标签点击（复用现有 scene-row 监听，见事件绑定）
   }
 
-  function refresh() {
+  // ========== 列表渲染 ==========
+  function getFilteredList() {
     const filters = {};
     if (state.activeFilter === 'favorite') filters.favorite = true;
     else if (state.activeFilter === 'recent') filters.recent = true;
     else if (state.activeFilter !== 'all') filters.categoryId = state.activeFilter;
     if (state.sceneTag) filters.tag = state.sceneTag;
-
-    const res = search.search(state.prompts, state.query, {
+    return search.search(state.prompts, state.query, {
       fuzzy: state.settings.searchFuzzy,
       pinyin: state.settings.searchPinyin,
       filters,
       limit: state.settings.sidebarCount || 50
     });
-    state.results = res.map((r) => r.prompt);
-    renderResults(res);
   }
 
   function escapeHtml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
-  // 线性图标：icon('star') => <svg class="ic"><use href="#ic-star"/></svg>
   function icon(name, cls) {
     return '<svg class="ic' + (cls ? ' ' + cls : '') + '"><use href="#ic-' + name + '"/></svg>';
   }
-  // 模型徽章：把 models[] 渲染为小标签
-  // max: 紧凑态最多显示几个；expandable: 是否支持悬浮展开全部（使用视图用）
   function modelBadges(models, max, expandable) {
     max = max || 2;
     if (!models || !models.length) return '';
@@ -237,12 +200,7 @@
       return '<span class="mbadge">' + escapeHtml(model) + '</span>';
     }).join('');
     const extra = models.length > max ? '<span class="mbadge mbadge-more">+' + (models.length - max) + '</span>' : '';
-
-    // 非展开：单层紧凑
-    if (!expandable) {
-      return '<span class="mbadges">' + compact + extra + '</span>';
-    }
-    // 展开模式：默认显示紧凑，悬浮时显示全部并自动换行
+    if (!expandable) return '<span class="mbadges">' + compact + extra + '</span>';
     const allHtml = models.map((id) => {
       const { company, model } = M.parseId(id);
       return '<span class="mbadge" title="' + escapeHtml(company) + '">' + escapeHtml(model) + '</span>';
@@ -258,6 +216,12 @@
     return escapeHtml(text.slice(0, idx)) + '<mark>' + escapeHtml(text.slice(idx, idx + q.length)) + '</mark>' + escapeHtml(text.slice(idx + q.length));
   }
 
+  function refresh() {
+    const res = getFilteredList();
+    state.results = res.map((r) => r.prompt);
+    renderResults(res);
+  }
+
   function renderResults(res) {
     elCount.textContent = res.length + ' 条';
     elClear.hidden = !state.query;
@@ -265,12 +229,11 @@
       const hasQuery = !!state.query;
       elResults.innerHTML = '<div class="empty"><div class="emoji">' + (hasQuery ? icon('search', 'ic-xl') : icon('inbox', 'ic-xl')) + '</div>' +
         '<div class="msg">' + (hasQuery ? '没有匹配的提示词' : '这里还没有提示词') + '</div>' +
-        '<div class="sub">' + (hasQuery ? '试试换个关键词或检查筛选条件' : '切换到「管理」创建第一个') + '</div></div>';
+        '<div class="sub">' + (hasQuery ? '试试换个关键词或检查筛选条件' : '点右上角 ＋ 创建第一个') + '</div></div>';
       return;
     }
     const catMap = {};
     state.categories.forEach((c) => { catMap[c.id] = c; });
-
     elResults.innerHTML = res.map((r, i) => {
       const p = r.prompt;
       const cat = catMap[p.categoryId];
@@ -296,10 +259,11 @@
     elResults.querySelectorAll('.result-item').forEach((item) => {
       const idx = parseInt(item.dataset.idx, 10);
       item.addEventListener('mouseenter', () => { state.selectedIndex = idx; updateSelection(false); });
+      // 点击卡片（非按钮区域）→ 进入详情页
       item.addEventListener('click', (e) => {
         if (e.target.closest('.mini-btn')) return;
         selectIndex(idx);
-        usePrompt(state.results[idx], 'default');
+        openDetail(state.results[idx]);
       });
       item.querySelector('.act-copy').addEventListener('click', (e) => { e.stopPropagation(); usePrompt(state.results[idx], 'copy'); });
       item.querySelector('.act-insert').addEventListener('click', (e) => { e.stopPropagation(); usePrompt(state.results[idx], 'insert'); });
@@ -318,12 +282,12 @@
     updateSelection(true);
   }
 
+  // ========== 使用提示词 ==========
   async function usePrompt(prompt, action) {
     if (!prompt) return;
     if (template.hasVariables(prompt.content)) { openVariableModal(prompt, action); return; }
     await finalizeUse(prompt, prompt.content, action);
   }
-
   async function finalizeUse(prompt, finalText, action) {
     const defaultAction = action === 'default' ? (state.settings.defaultAction || 'copy') : action;
     await store.recordUsage(prompt.id);
@@ -334,12 +298,370 @@
       if (!ok) await copyText(finalText);
     } else { await copyText(finalText); await insertIntoPage(finalText); toast('已复制并插入'); }
   }
-
   async function toggleFav(prompt) {
     const fav = await store.toggleFavorite(prompt.id);
     prompt.favorite = fav;
     refresh();
     toast(fav ? '已收藏' : '已取消收藏');
+  }
+
+  // ========== 详情页（预览/编辑） ==========
+  function openDetail(prompt) {
+    state.editingId = prompt ? prompt.id : null;
+    state.detailMode = 'edit';   // 默认编辑模式
+    fillCategorySelect();
+    const p = prompt;
+    const form = $('#prompt-form');
+    form.title.value = p ? p.title : '';
+    form.description.value = p ? (p.description || '') : '';
+    form.categoryId.value = p ? (p.categoryId || '') : '';
+    form.tags.value = p ? (p.tags || []).join(', ') : '';
+    form.content.value = p ? p.content : '';
+    state.editorModels = {};
+    (p && p.models ? p.models : []).forEach((id) => { state.editorModels[id] = true; });
+    renderModelPanel();
+    updateVarPreview();
+    $('#detail-title').textContent = p ? p.title : '新建提示词';
+    $('#detail-delete').hidden = !p;
+    renderDetailPreview(p);
+    applyDetailMode();
+    $('#detail-sheet').hidden = false;
+    setTimeout(() => { if (state.detailMode === 'edit') form.title.focus(); }, 60);
+  }
+  function closeDetail() {
+    $('#detail-sheet').hidden = true;
+    state.editingId = null;
+  }
+  function applyDetailMode() {
+    const isEdit = state.detailMode === 'edit';
+    $$('.mode-tab').forEach((t) => t.classList.toggle('active', t.dataset.mode === state.detailMode));
+    $('#detail-preview').hidden = isEdit;
+    $('#prompt-form').hidden = !isEdit;
+  }
+  function switchDetailMode(mode) {
+    state.detailMode = mode;
+    if (mode === 'preview') {
+      // 切到预览时，用当前表单值（未保存的也能预览）
+      const p = currentFormPrompt();
+      renderDetailPreview(p);
+    }
+    applyDetailMode();
+  }
+  // 把当前表单内容组装成临时 prompt 对象（预览用）
+  function currentFormPrompt() {
+    const form = $('#prompt-form');
+    return {
+      title: form.title.value,
+      description: form.description.value,
+      categoryId: form.categoryId.value || null,
+      tags: form.tags.value.split(/[,，、\s]+/).map((t) => t.trim()).filter(Boolean),
+      models: collectEditorModels(),
+      content: form.content.value
+    };
+  }
+  function renderDetailPreview(p) {
+    if (!p) { $('#detail-preview').innerHTML = ''; return; }
+    const catMap = {};
+    state.categories.forEach((c) => { catMap[c.id] = c; });
+    const cat = catMap[p.categoryId];
+    const tags = (p.tags || []).map((t) => '<span class="pv-tag">' + escapeHtml(t) + '</span>').join('');
+    const hasVar = template.hasVariables(p.content);
+    const box = $('#detail-preview');
+    box.innerHTML =
+      '<div class="pv-title">' + escapeHtml(p.title || '(未命名)') + '</div>' +
+      (p.description ? '<div class="pv-desc">' + escapeHtml(p.description) + '</div>' : '') +
+      '<div class="pv-meta">' +
+        (cat ? '<span class="pv-cat">' + escapeHtml(cat.name) + '</span>' : '') +
+        tags +
+        (p.models && p.models.length ? '<span class="mbadges">' + modelBadges(p.models, 99) + '</span>' : '') +
+      '</div>' +
+      (hasVar ? '<div class="pv-section-label">变量</div><div class="var-preview">' +
+        template.extractVariables(p.content).map((v) => '<span class="var-pill">' + escapeHtml(v.name) + (v.defaultValue ? '=' + escapeHtml(v.defaultValue) : '') + '</span>').join('') +
+        '</div>' : '') +
+      '<div class="pv-section-label">提示词内容</div>' +
+      '<div class="pv-content">' + escapeHtml(p.content || '') + '</div>' +
+      '<div class="pv-actions">' +
+        '<button class="btn ghost pv-copy">' + icon('copy') + ' 复制</button>' +
+        '<button class="btn primary pv-insert">' + icon('insert') + ' 插入输入框</button>' +
+      '</div>';
+    const realP = state.editingId ? state.prompts.find((x) => x.id === state.editingId) : p;
+    box.querySelector('.pv-copy').addEventListener('click', () => usePrompt(realP || p, 'copy'));
+    box.querySelector('.pv-insert').addEventListener('click', () => usePrompt(realP || p, 'insert'));
+  }
+
+  function fillCategorySelect() {
+    $('#form-category').innerHTML = '<option value="">（未分类）</option>' +
+      state.categories.map((c) => '<option value="' + c.id + '">' + escapeHtml(c.name) + '</option>').join('');
+  }
+
+  function updateVarPreview() {
+    const content = $('#prompt-form').content.value;
+    const vars = template.extractVariables(content);
+    const box = $('#var-preview');
+    if (!vars.length) { box.innerHTML = '<span class="muted">暂无变量</span>'; return; }
+    box.innerHTML = vars.map((v) => '<span class="var-pill">' + escapeHtml(v.name) + (v.defaultValue ? '=' + escapeHtml(v.defaultValue) : '') + '</span>').join('');
+  }
+
+  async function savePromptFromForm() {
+    const form = $('#prompt-form');
+    if (!form.reportValidity()) return;
+    const tags = form.tags.value.split(/[,，、\s]+/).map((t) => t.trim()).filter(Boolean);
+    await store.savePrompt({
+      id: state.editingId || undefined,
+      title: form.title.value.trim(),
+      description: form.description.value.trim(),
+      categoryId: form.categoryId.value || null,
+      tags: tags,
+      models: collectEditorModels(),
+      content: form.content.value
+    });
+    state.prompts = await store.getPrompts();
+    closeDetail();
+    renderCategoryChips();
+    renderSceneRow();
+    refresh();
+    toast(state.editingId ? '已更新' : '已创建');
+  }
+  async function deleteCurrent() {
+    if (!state.editingId) return;
+    if (!confirm('确定删除该提示词？此操作不可撤销。')) return;
+    await store.deletePrompt(state.editingId);
+    state.prompts = await store.getPrompts();
+    closeDetail();
+    renderCategoryChips();
+    renderSceneRow();
+    refresh();
+    toast('已删除');
+  }
+
+  // ---------- 模型多选下拉框 ----------
+  function renderModelPanel() {
+    const M = PH.models;
+    const panel = $('#mp-panel');
+    let html = '';
+    const companies = M.CATALOG.slice().sort((a, b) => a.company.localeCompare(b.company, 'en'));
+    companies.forEach((co) => {
+      const allIds = co.models.map((m) => M.makeId(co.company, m));
+      const checkedCount = allIds.filter((id) => state.editorModels[id]).length;
+      const allChecked = checkedCount === allIds.length;
+      const partial = checkedCount > 0 && !allChecked;
+      html += '<div class="mp-company">';
+      html += '<div class="mp-company-head">';
+      html += '<input type="checkbox" class="mp-company-all" data-company="' + escapeHtml(co.company) + '"' +
+        (allChecked ? ' checked' : '') + (partial ? ' data-partial="1"' : '') + ' />';
+      html += '<span class="mp-company-toggle" data-company="' + escapeHtml(co.company) + '">' +
+        icon('expand') + escapeHtml(co.company) +
+        (partial ? ' <em class="mp-partial">' + checkedCount + '/' + allIds.length + '</em>' :
+         (checkedCount > 0 ? ' <em class="mp-partial">✓</em>' : '')) + '</span>';
+      html += '</div>';
+      const expanded = checkedCount > 0;
+      html += '<div class="mp-models' + (expanded ? ' open' : '') + '">';
+      co.models.forEach((m) => {
+        const id = M.makeId(co.company, m);
+        const on = !!state.editorModels[id];
+        html += '<label class="mp-model' + (on ? ' on' : '') + '">';
+        html += '<input type="checkbox" class="mp-model-cb" data-id="' + escapeHtml(id) + '"' + (on ? ' checked' : '') + ' />';
+        html += '<span>' + escapeHtml(m) + '</span></label>';
+      });
+      html += '</div></div>';
+    });
+    panel.innerHTML = html;
+    updateModelTrigger();
+  }
+  function updateModelTrigger() {
+    const ids = collectEditorModels();
+    const label = $('#mp-trigger-label');
+    if (!ids.length) { label.textContent = '未选择（可选）'; return; }
+    const M = PH.models;
+    const names = ids.map((id) => M.parseId(id).model);
+    if (ids.length <= 2) label.textContent = names.join('、');
+    else label.textContent = names.slice(0, 2).join('、') + ' +' + (ids.length - 2);
+  }
+  function collectEditorModels() {
+    return Object.keys(state.editorModels).filter((k) => state.editorModels[k]);
+  }
+
+  // ---------- 分类 ----------
+  function openCategoryModal(id) {
+    state.editingCategoryId = id || null;
+    const c = id ? state.categories.find((x) => x.id === id) : null;
+    $('#cat-overlay-title').textContent = c ? '编辑分类' : '新建分类';
+    $('#cat-name').value = c ? c.name : '';
+    $('#cat-overlay').hidden = false;
+    setTimeout(() => $('#cat-name').focus(), 50);
+  }
+  async function saveCategory() {
+    const name = $('#cat-name').value.trim();
+    if (!name) { toast('请填写分类名称'); return; }
+    await store.saveCategory({ id: state.editingCategoryId || undefined, name: name });
+    state.categories = await store.getCategories();
+    $('#cat-overlay').hidden = true;
+    fillCategorySelect();
+    renderCategoryChips();
+    renderSceneRow();
+    if (!$('#catm-sheet').hidden) renderCatmList();
+    toast(state.editingCategoryId ? '分类已更新' : '分类已创建');
+  }
+
+  // ---------- 分类管理面板 ----------
+  function openCatmSheet() { renderCatmList(); $('#catm-sheet').hidden = false; }
+  function renderCatmList() {
+    const counts = {};
+    state.prompts.forEach((p) => { if (p.categoryId) counts[p.categoryId] = (counts[p.categoryId] || 0) + 1; });
+    const list = $('#catm-list');
+    if (!state.categories.length) { list.innerHTML = '<div class="mgr-empty">还没有分类，点右上「新建」</div>'; return; }
+    list.innerHTML = '<div class="mgr-hint">共 ' + state.categories.length + ' 个分类。拖动手柄调整顺序，编辑改名，删除会把该分类下提示词变为「未分类」。</div>' +
+      state.categories.map((c) =>
+        '<div class="mgr-item" data-cid="' + c.id + '" draggable="true">' +
+          '<span class="mgr-handle" title="拖动排序">' + icon('grip') + '</span>' +
+          '<div class="mgr-main"><div class="mgr-name">' + escapeHtml(c.name) + '</div>' +
+            '<div class="mgr-sub">' + (counts[c.id] || 0) + ' 条提示词</div></div>' +
+          '<div class="mgr-actions">' +
+            '<button class="mini-btn catm-edit" data-cid="' + c.id + '">编辑</button>' +
+            '<button class="mini-btn catm-del" data-cid="' + c.id + '">删除</button>' +
+          '</div>' +
+        '</div>'
+      ).join('');
+    bindCatmDrag(list);
+    list.querySelectorAll('.catm-edit').forEach((b) => b.addEventListener('click', () => openCategoryModal(b.dataset.cid)));
+    list.querySelectorAll('.catm-del').forEach((b) => b.addEventListener('click', async () => {
+      const c = state.categories.find((x) => x.id === b.dataset.cid);
+      const n = counts[b.dataset.cid] || 0;
+      if (!confirm('确定删除分类「' + (c ? c.name : '') + '」？' + (n ? '其下 ' + n + ' 条提示词将变为未分类。' : ''))) return;
+      await store.deleteCategory(b.dataset.cid);
+      state.categories = await store.getCategories();
+      state.prompts = await store.getPrompts();
+      if (state.activeFilter === b.dataset.cid) { state.activeFilter = 'all'; state.sceneTag = null; }
+      fillCategorySelect();
+      renderCategoryChips();
+      renderSceneRow();
+      refresh();
+      renderCatmList();
+      toast('分类已删除');
+    }));
+  }
+
+  // ---------- 标签管理面板 ----------
+  async function openTagmSheet() {
+    const isCategory = state.categories.some((c) => c.id === state.activeFilter);
+    if (!isCategory) { toast('请先在上方选择一个分类，再管理其标签'); return; }
+    await renderTagmList();
+    $('#tagm-sheet').hidden = false;
+  }
+  async function renderTagmList() {
+    const cat = state.categories.find((c) => c.id === state.activeFilter);
+    $('#tagm-title').textContent = '管理标签 · ' + (cat ? cat.name : '');
+    const { tags, counts: tagCounts } = await store.getOrderedTagsForCategory(state.activeFilter);
+    const list = $('#tagm-list');
+    if (!tags.length) { list.innerHTML = '<div class="mgr-empty">该分类下暂无标签<br>标签在编辑提示词时填写，会自动汇总到这里。</div>'; return; }
+    list.innerHTML = '<div class="mgr-hint">共 ' + tags.length + ' 个标签（仅作用于当前分类）。拖动手柄调整顺序，重命名/删除会批量更新该分类下的提示词。</div>' +
+      tags.map((t) =>
+        '<div class="mgr-item" data-tag="' + escapeHtml(t) + '" draggable="true">' +
+          '<span class="mgr-handle" title="拖动排序">' + icon('grip') + '</span>' +
+          '<div class="mgr-main"><div class="mgr-name">' + escapeHtml(t) + '</div>' +
+            '<div class="mgr-sub">' + tagCounts[t] + ' 条提示词</div></div>' +
+          '<div class="mgr-actions">' +
+            '<button class="mini-btn tagm-rename" data-tag="' + escapeHtml(t) + '">重命名</button>' +
+            '<button class="mini-btn tagm-del" data-tag="' + escapeHtml(t) + '">删除</button>' +
+          '</div>' +
+        '</div>'
+      ).join('');
+    bindTagmDrag(list);
+    list.querySelectorAll('.tagm-rename').forEach((b) => {
+      b.addEventListener('click', async () => {
+        const old = b.dataset.tag;
+        const next = prompt('将标签「' + old + '」重命名为：', old);
+        if (next == null) return;
+        const newName = String(next).trim();
+        if (!newName) { toast('标签名不能为空'); return; }
+        if (newName === old) return;
+        const n = await store.renameTagInCategory(state.activeFilter, old, newName);
+        state.prompts = await store.getPrompts();
+        if (state.sceneTag === old) state.sceneTag = newName;
+        renderSceneRow();
+        refresh();
+        await renderTagmList();
+        toast('已重命名，影响 ' + n + ' 条');
+      });
+    });
+    list.querySelectorAll('.tagm-del').forEach((b) => {
+      b.addEventListener('click', async () => {
+        const t = b.dataset.tag;
+        const n = tagCounts[t];
+        if (!confirm('确定删除标签「' + t + '」？将从该分类下 ' + n + ' 条提示词中移除（不删除提示词本身）。')) return;
+        const cnt = await store.deleteTagInCategory(state.activeFilter, t);
+        state.prompts = await store.getPrompts();
+        if (state.sceneTag === t) state.sceneTag = null;
+        renderSceneRow();
+        refresh();
+        await renderTagmList();
+        toast('已删除，影响 ' + cnt + ' 条');
+      });
+    });
+  }
+  async function addTagToFirstPrompt(tagName) {
+    const target = state.prompts.find((p) => p.categoryId === state.activeFilter);
+    if (!target) { toast('该分类下还没有提示词，请先创建一条'); return; }
+    const tags = target.tags || [];
+    if (tags.indexOf(tagName) >= 0) { toast('该标签已存在'); return; }
+    tags.push(tagName);
+    await store.savePrompt({ id: target.id, tags: tags });
+    state.prompts = await store.getPrompts();
+    renderSceneRow();
+    refresh();
+    await renderTagmList();
+    toast('已新建标签「' + tagName + '」');
+  }
+
+  // ---------- 通用拖拽排序 ----------
+  function bindDragReorder(container, onReorder) {
+    let dragEl = null;
+    container.querySelectorAll('.mgr-item').forEach((item) => {
+      item.addEventListener('dragstart', (e) => {
+        dragEl = item; item.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', ''); } catch (err) {}
+      });
+      item.addEventListener('dragend', () => {
+        item.classList.remove('dragging');
+        container.querySelectorAll('.mgr-item').forEach((it) => it.classList.remove('drag-over'));
+        dragEl = null;
+      });
+      item.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (!dragEl || dragEl === item) return;
+        e.dataTransfer.dropEffect = 'move';
+        container.querySelectorAll('.mgr-item').forEach((it) => it.classList.remove('drag-over'));
+        item.classList.add('drag-over');
+      });
+      item.addEventListener('dragleave', () => { item.classList.remove('drag-over'); });
+      item.addEventListener('drop', (e) => {
+        e.preventDefault();
+        if (!dragEl || dragEl === item) return;
+        const rect = item.getBoundingClientRect();
+        const after = (e.clientY - rect.top) > rect.height / 2;
+        if (after) item.parentNode.insertBefore(dragEl, item.nextSibling);
+        else item.parentNode.insertBefore(dragEl, item);
+        onReorder(Array.from(container.querySelectorAll('.mgr-item')));
+      });
+    });
+  }
+  function bindCatmDrag(container) {
+    bindDragReorder(container, async (orderedItems) => {
+      await store.reorderCategories(orderedItems.map((it) => it.dataset.cid));
+      state.categories = await store.getCategories();
+      renderCategoryChips();
+      renderSceneRow();
+      fillCategorySelect();
+      toast('顺序已保存');
+    });
+  }
+  function bindTagmDrag(container) {
+    bindDragReorder(container, async (orderedItems) => {
+      await store.saveTagOrderForCategory(state.activeFilter, orderedItems.map((it) => it.dataset.tag));
+      renderSceneRow();
+      toast('顺序已保存');
+    });
   }
 
   // ---------- 变量弹层 ----------
@@ -399,473 +721,8 @@
     });
   }
 
-  // ========== 管理视图 ==========
-  async function renderManageFilters() {
-    // 分类 chips
-    const row = $('#m-cat-row');
-    const counts = {};
-    state.prompts.forEach((p) => { if (p.categoryId) counts[p.categoryId] = (counts[p.categoryId] || 0) + 1; });
-    $('#m-cat-all').textContent = state.prompts.length;
-    row.querySelectorAll('.m-chip[data-mcat]:not([data-mcat="all"])').forEach((c) => c.remove());
-    state.categories.forEach((c) => {
-      const b = document.createElement('button');
-      b.className = 'm-chip cat-chip' + (state.mCat === c.id ? ' active' : '');
-      b.dataset.mcat = c.id;
-      b.innerHTML = escapeHtml(c.name) + ' <span class="cnt">' + (counts[c.id] || 0) + '</span>';
-      b.addEventListener('click', () => { state.mCat = c.id; state.mTag = null; renderManageFilters(); refreshManage(); });
-      row.appendChild(b);
-    });
-    row.querySelector('[data-mcat="all"]').classList.toggle('active', state.mCat === 'all');
-    row.querySelector('[data-mcat="all"]').onclick = () => { state.mCat = 'all'; state.mTag = null; renderManageFilters(); refreshManage(); };
-
-    // 标签行：只统计当前选中分类下的标签（分类下的具体场景）
-    // 选「全部」时不显示标签行（标签是分类下的细分，脱离分类无意义）
-    const tagGroup = $('#m-tag-group');
-    const tagRow = $('#m-tag-row');
-    if (state.mCat === 'all') {
-      tagGroup.hidden = true;
-      tagRow.innerHTML = '';
-    } else {
-      // 用 store 的有序标签（合并手动排序 + 新出现的）
-      const { tags, counts: tagCounts } = await store.getOrderedTagsForCategory(state.mCat);
-      // 清理失效的标签筛选（保存/删除后该标签可能已不存在）
-      if (state.mTag && tags.indexOf(state.mTag) < 0) state.mTag = null;
-      tagGroup.hidden = false;
-      if (!tags.length) {
-        tagRow.innerHTML = '<span class="no-tag-hint">该分类下暂无标签（可在编辑提示词时添加）</span>';
-      } else {
-        tagRow.innerHTML = tags.map((t) =>
-          '<button class="m-chip tag-chip' + (state.mTag === t ? ' active' : '') + '" data-tag="' + escapeHtml(t) + '">' +
-            escapeHtml(t) + '<span class="cnt">' + tagCounts[t] + '</span></button>'
-        ).join('');
-        tagRow.querySelectorAll('.m-chip').forEach((c) => {
-          c.addEventListener('click', () => { state.mTag = state.mTag === c.dataset.tag ? null : c.dataset.tag; renderManageFilters(); refreshManage(); });
-        });
-      }
-    }
-  }
-
-  function getManageList() {
-    let pool = state.prompts;
-    if (state.mCat !== 'all') pool = pool.filter((p) => p.categoryId === state.mCat);
-    if (state.mTag) pool = pool.filter((p) => (p.tags || []).indexOf(state.mTag) >= 0);
-    if (!state.mQuery) {
-      return pool.slice().sort((a, b) => {
-        if (!!b.favorite - !!a.favorite) return !!b.favorite - !!a.favorite ? 1 : -1;
-        return (b.updatedAt || 0) - (a.updatedAt || 0);
-      });
-    }
-    return search.search(pool, state.mQuery, { fuzzy: true, pinyin: true }).map((r) => r.prompt);
-  }
-
-  function refreshManage() {
-    const list = getManageList();
-    $('#m-count').textContent = list.length + ' 条';
-    const catMap = {};
-    state.categories.forEach((c) => { catMap[c.id] = c; });
-    const wrap = $('#manage-list');
-
-    if (!list.length) {
-      wrap.innerHTML = '<div class="empty"><div class="emoji">' + icon('inbox', 'ic-xl') + '</div><div class="msg">' + (state.mQuery ? '没有匹配项' : '还没有提示词') + '</div><div class="sub">点击「新建」创建</div></div>';
-      return;
-    }
-
-    wrap.innerHTML = list.map((p) => {
-      const cat = catMap[p.categoryId];
-      const vars = template.extractVariables(p.content);
-      const tags = (p.tags || []).slice(0, 3).map((t) => '<span class="m-tag">' + escapeHtml(t) + '</span>').join('');
-      return '<div class="m-card" data-id="' + p.id + '">' +
-        '<button class="star ' + (p.favorite ? 'on' : '') + '" data-fav="' + p.id + '">' + icon(p.favorite ? 'star-fill' : 'star') + '</button>' +
-        '<div class="info">' +
-          '<div class="m-title">' + highlight(p.title, state.mQuery) + '</div>' +
-          (p.description ? '<div class="m-desc">' + escapeHtml(p.description) + '</div>' : '') +
-          '<div class="m-meta">' +
-            (cat ? '<span class="m-cat">' + escapeHtml(cat.name) + '</span>' : '') +
-            tags +
-            (vars.length ? '<span class="m-var">' + vars.length + ' 变量</span>' : '') +
-            (p.usageCount ? '<span class="m-use">用 ' + p.usageCount + ' 次</span>' : '') +
-          '</div>' +
-          (p.models && p.models.length ? '<div class="m-models">' + modelBadges(p.models, 3) + '</div>' : '') +
-        '</div>' +
-        '<span class="chev">' + icon('chevron') + '</span>' +
-      '</div>';
-    }).join('');
-
-    wrap.querySelectorAll('.m-card').forEach((card) => {
-      card.addEventListener('click', (e) => {
-        if (e.target.classList.contains('star')) return;
-        openEditor(card.dataset.id);
-      });
-    });
-    wrap.querySelectorAll('[data-fav]').forEach((b) => b.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await store.toggleFavorite(b.dataset.fav);
-      state.prompts = await store.getPrompts();
-      renderManageFilters();
-      refreshManage();
-    }));
-  }
-
-  // ---------- 编辑器 ----------
-  function openEditor(id) {
-    state.editingId = id || null;
-    const p = id ? state.prompts.find((x) => x.id === id) : null;
-    $('#editor-title').textContent = p ? ('编辑：' + p.title) : '新建提示词';
-    $('#editor-delete').hidden = !p;
-    const form = $('#prompt-form');
-    fillCategorySelect();
-    form.title.value = p ? p.title : '';
-    form.description.value = p ? (p.description || '') : '';
-    form.categoryId.value = p ? (p.categoryId || '') : '';
-    form.tags.value = p ? (p.tags || []).join(', ') : '';
-    form.content.value = p ? p.content : '';
-    // 初始化模型选中状态
-    state.editorModels = {};
-    (p && p.models ? p.models : []).forEach((id) => { state.editorModels[id] = true; });
-    renderModelPanel();
-    updateVarPreview();
-    $('#editor-sheet').hidden = false;
-    setTimeout(() => form.title.focus(), 50);
-  }
-  function closeEditor() { $('#editor-sheet').hidden = true; state.editingId = null; }
-
-  function fillCategorySelect() {
-    $('#form-category').innerHTML = '<option value="">（未分类）</option>' +
-      state.categories.map((c) => '<option value="' + c.id + '">' + escapeHtml(c.name) + '</option>').join('');
-  }
-
-  // ---------- 模型多选下拉框 ----------
-  // state.editorModels: { [modelId]: true } 当前编辑器选中的模型集合
-  // 渲染下拉面板内容（区域 > 供应商(一级,可全选) > 模型(二级)）
-  function renderModelPanel() {
-    const M = PH.models;
-    const panel = $('#mp-panel');
-    let html = '';
-    // 按公司名首字母排序
-    const companies = M.CATALOG.slice().sort((a, b) => a.company.localeCompare(b.company, 'en'));
-    companies.forEach((co) => {
-      const allIds = co.models.map((m) => M.makeId(co.company, m));
-      const checkedCount = allIds.filter((id) => state.editorModels[id]).length;
-      const allChecked = checkedCount === allIds.length;
-      const partial = checkedCount > 0 && !allChecked;
-      html += '<div class="mp-company">';
-      // 一级：供应商（带全选 + 折叠展开）
-      html += '<div class="mp-company-head">';
-      html += '<input type="checkbox" class="mp-company-all" data-company="' + escapeHtml(co.company) + '"' +
-        (allChecked ? ' checked' : '') + (partial ? ' data-partial="1"' : '') + ' />';
-      html += '<span class="mp-company-toggle" data-company="' + escapeHtml(co.company) + '">' +
-        icon('expand') + escapeHtml(co.company) +
-        (partial ? ' <em class="mp-partial">' + checkedCount + '/' + allIds.length + '</em>' :
-         (checkedCount > 0 ? ' <em class="mp-partial">✓</em>' : '')) + '</span>';
-      html += '</div>';
-      // 二级：模型列表（默认折叠，有选中时展开）
-      const expanded = checkedCount > 0;
-      html += '<div class="mp-models' + (expanded ? ' open' : '') + '">';
-      co.models.forEach((m) => {
-        const id = M.makeId(co.company, m);
-        const on = !!state.editorModels[id];
-        html += '<label class="mp-model' + (on ? ' on' : '') + '">';
-        html += '<input type="checkbox" class="mp-model-cb" data-id="' + escapeHtml(id) + '"' + (on ? ' checked' : '') + ' />';
-        html += '<span>' + escapeHtml(m) + '</span></label>';
-      });
-      html += '</div></div>';
-    });
-    panel.innerHTML = html;
-    updateModelTrigger();
-  }
-
-  // 更新触发按钮显示：已选数量或前几个模型名
-  function updateModelTrigger() {
-    const ids = collectEditorModels();
-    const label = $('#mp-trigger-label');
-    if (!ids.length) { label.textContent = '未选择（可选）'; return; }
-    const M = PH.models;
-    const names = ids.map((id) => M.parseId(id).model);
-    if (ids.length <= 2) label.textContent = names.join('、');
-    else label.textContent = names.slice(0, 2).join('、') + ' +' + (ids.length - 2);
-  }
-
-  function updateModelCount() {
-    // 保留兼容（旧引用），下拉版用 updateModelTrigger
-    updateModelTrigger();
-  }
-
-  // 把当前编辑器的选中模型收集为数组
-  function collectEditorModels() {
-    return Object.keys(state.editorModels).filter((k) => state.editorModels[k]);
-  }
-
-  function updateVarPreview() {
-    const content = $('#prompt-form').content.value;
-    const vars = template.extractVariables(content);
-    const box = $('#var-preview');
-    if (!vars.length) { box.innerHTML = '<span class="muted">暂无变量</span>'; return; }
-    box.innerHTML = vars.map((v) => '<span class="var-pill">' + escapeHtml(v.name) + (v.defaultValue ? '=' + escapeHtml(v.defaultValue) : '') + '</span>').join('');
-  }
-
-  async function savePromptFromForm() {
-    const form = $('#prompt-form');
-    if (!form.reportValidity()) return;
-    const tags = form.tags.value.split(/[,，、\s]+/).map((t) => t.trim()).filter(Boolean);
-    await store.savePrompt({
-      id: state.editingId || undefined,
-      title: form.title.value.trim(),
-      description: form.description.value.trim(),
-      categoryId: form.categoryId.value || null,
-      tags: tags,
-      models: collectEditorModels(),
-      content: form.content.value
-    });
-    state.prompts = await store.getPrompts();
-    closeEditor();
-    renderCategoryChips();
-    renderManageFilters();
-    refresh();
-    refreshManage();
-    toast(state.editingId ? '已更新' : '已创建');
-  }
-
-  async function deleteCurrent() {
-    if (!state.editingId) return;
-    if (!confirm('确定删除该提示词？此操作不可撤销。')) return;
-    await store.deletePrompt(state.editingId);
-    state.prompts = await store.getPrompts();
-    closeEditor();
-    renderCategoryChips();
-    renderManageFilters();
-    refresh();
-    refreshManage();
-    toast('已删除');
-  }
-
-  // ---------- 分类 ----------
-  function openCategoryModal(id) {
-    state.editingCategoryId = id || null;
-    const c = id ? state.categories.find((x) => x.id === id) : null;
-    $('#cat-overlay-title').textContent = c ? '编辑分类' : '新建分类';
-    $('#cat-name').value = c ? c.name : '';
-    $('#cat-overlay').hidden = false;
-    setTimeout(() => $('#cat-name').focus(), 50);
-  }
-  async function saveCategory() {
-    const name = $('#cat-name').value.trim();
-    if (!name) { toast('请填写分类名称'); return; }
-    await store.saveCategory({
-      id: state.editingCategoryId || undefined,
-      name: name
-    });
-    state.categories = await store.getCategories();
-    $('#cat-overlay').hidden = true;
-    fillCategorySelect();
-    renderCategoryChips();
-    renderManageFilters();
-    renderSceneRow();
-    // 若分类管理面板打开着，刷新它
-    if (!$('#catm-sheet').hidden) renderCatmList();
-    toast(state.editingCategoryId ? '分类已更新' : '分类已创建');
-  }
-
-  // ---------- 分类管理面板 ----------
-  function openCatmSheet() {
-    renderCatmList();
-    $('#catm-sheet').hidden = false;
-  }
-  function renderCatmList() {
-    const counts = {};
-    state.prompts.forEach((p) => { if (p.categoryId) counts[p.categoryId] = (counts[p.categoryId] || 0) + 1; });
-    const list = $('#catm-list');
-    if (!state.categories.length) {
-      list.innerHTML = '<div class="mgr-empty">还没有分类，点右上「新建」</div>';
-      return;
-    }
-    list.innerHTML =
-      '<div class="mgr-hint">共 ' + state.categories.length + ' 个分类。拖动左侧手柄调整顺序，编辑改名，删除会把该分类下提示词变为「未分类」。</div>' +
-      state.categories.map((c) =>
-        '<div class="mgr-item" data-cid="' + c.id + '" draggable="true">' +
-          '<span class="mgr-handle" title="拖动排序">' + icon('grip') + '</span>' +
-          '<div class="mgr-main"><div class="mgr-name">' + escapeHtml(c.name) + '</div>' +
-            '<div class="mgr-sub">' + (counts[c.id] || 0) + ' 条提示词</div></div>' +
-          '<div class="mgr-actions">' +
-            '<button class="mini-btn catm-edit" data-cid="' + c.id + '">编辑</button>' +
-            '<button class="mini-btn catm-del" data-cid="' + c.id + '">删除</button>' +
-          '</div>' +
-        '</div>'
-      ).join('');
-    bindCatmDrag(list);
-    list.querySelectorAll('.catm-edit').forEach((b) => b.addEventListener('click', () => openCategoryModal(b.dataset.cid)));
-    list.querySelectorAll('.catm-del').forEach((b) => b.addEventListener('click', async () => {
-      const c = state.categories.find((x) => x.id === b.dataset.cid);
-      const n = counts[b.dataset.cid] || 0;
-      if (!confirm('确定删除分类「' + (c ? c.name : '') + '」？' + (n ? '其下 ' + n + ' 条提示词将变为未分类。' : ''))) return;
-      await store.deleteCategory(b.dataset.cid);
-      state.categories = await store.getCategories();
-      state.prompts = await store.getPrompts();
-      if (state.mCat === b.dataset.cid) state.mCat = 'all';
-      if (state.activeFilter === b.dataset.cid) { state.activeFilter = 'all'; state.sceneTag = null; }
-      fillCategorySelect();
-      renderCategoryChips();
-      renderManageFilters();
-      renderSceneRow();
-      refresh();
-      refreshManage();
-      renderCatmList();
-      toast('分类已删除');
-    }));
-  }
-
-  // 通用拖拽排序：在 container 内的 .mgr-item 之间拖动，松手后按新顺序回调 onReorder(orderedItems[])
-  function bindDragReorder(container, onReorder) {
-    let dragEl = null;
-    container.querySelectorAll('.mgr-item').forEach((item) => {
-      item.addEventListener('dragstart', (e) => {
-        dragEl = item;
-        item.classList.add('dragging');
-        e.dataTransfer.effectAllowed = 'move';
-        try { e.dataTransfer.setData('text/plain', ''); } catch (err) {}
-      });
-      item.addEventListener('dragend', () => {
-        item.classList.remove('dragging');
-        container.querySelectorAll('.mgr-item').forEach((it) => it.classList.remove('drag-over'));
-        dragEl = null;
-      });
-      item.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        if (!dragEl || dragEl === item) return;
-        e.dataTransfer.dropEffect = 'move';
-        container.querySelectorAll('.mgr-item').forEach((it) => it.classList.remove('drag-over'));
-        item.classList.add('drag-over');
-      });
-      item.addEventListener('dragleave', () => { item.classList.remove('drag-over'); });
-      item.addEventListener('drop', (e) => {
-        e.preventDefault();
-        if (!dragEl || dragEl === item) return;
-        // 判断插入到目标的前面还是后面
-        const rect = item.getBoundingClientRect();
-        const after = (e.clientY - rect.top) > rect.height / 2;
-        if (after) item.parentNode.insertBefore(dragEl, item.nextSibling);
-        else item.parentNode.insertBefore(dragEl, item);
-        const ordered = Array.from(container.querySelectorAll('.mgr-item')).map((it) => it);
-        onReorder(ordered);
-      });
-    });
-  }
-
-  function bindCatmDrag(container) {
-    bindDragReorder(container, async (orderedItems) => {
-      const orderedIds = orderedItems.map((it) => it.dataset.cid);
-      await store.reorderCategories(orderedIds);
-      state.categories = await store.getCategories(); // 已按新 sortOrder 排好
-      renderCategoryChips();
-      renderManageFilters();
-      renderSceneRow();
-      fillCategorySelect();
-      toast('顺序已保存');
-    });
-  }
-
-  function bindTagmDrag(container) {
-    bindDragReorder(container, async (orderedItems) => {
-      const orderedTags = orderedItems.map((it) => it.dataset.tag);
-      await store.saveTagOrderForCategory(state.mCat, orderedTags);
-      renderManageFilters();
-      renderSceneRow();
-      toast('顺序已保存');
-    });
-  }
-
-  // ---------- 标签管理面板（作用于当前分类） ----------
-  async function openTagmSheet() {
-    // 标签是分类下的细分，必须先选定一个分类
-    const isCategory = state.categories.some((c) => c.id === state.mCat);
-    if (!isCategory) {
-      toast('请先在上方选择一个分类，再管理其标签');
-      return;
-    }
-    await renderTagmList();
-    $('#tagm-sheet').hidden = false;
-  }
-  async function renderTagmList() {
-    const cat = state.categories.find((c) => c.id === state.mCat);
-    $('#tagm-title').textContent = '管理标签 · ' + (cat ? cat.name : '');
-    // 用 store 的有序标签（合并手动排序 + 新出现的）
-    const { tags, counts: tagCounts } = await store.getOrderedTagsForCategory(state.mCat);
-    const list = $('#tagm-list');
-    if (!tags.length) {
-      list.innerHTML = '<div class="mgr-empty">该分类下暂无标签<br>标签在编辑提示词时填写，会自动汇总到这里。</div>';
-      return;
-    }
-    list.innerHTML =
-      '<div class="mgr-hint">共 ' + tags.length + ' 个标签（仅作用于当前分类）。拖动手柄调整顺序，重命名/删除会批量更新该分类下的提示词。</div>' +
-      tags.map((t) =>
-        '<div class="mgr-item" data-tag="' + escapeHtml(t) + '" draggable="true">' +
-          '<span class="mgr-handle" title="拖动排序">' + icon('grip') + '</span>' +
-          '<div class="mgr-main"><div class="mgr-name">' + escapeHtml(t) + '</div>' +
-            '<div class="mgr-sub">' + tagCounts[t] + ' 条提示词</div></div>' +
-          '<div class="mgr-actions">' +
-            '<button class="mini-btn tagm-rename" data-tag="' + escapeHtml(t) + '">重命名</button>' +
-            '<button class="mini-btn tagm-del" data-tag="' + escapeHtml(t) + '">删除</button>' +
-          '</div>' +
-        '</div>'
-      ).join('');
-    bindTagmDrag(list);
-    list.querySelectorAll('.tagm-rename').forEach((b) => {
-      b.addEventListener('click', async () => {
-        const old = b.dataset.tag;
-        const next = prompt('将标签「' + old + '」重命名为：', old);
-        if (next == null) return;
-        const newName = String(next).trim();
-        if (!newName) { toast('标签名不能为空'); return; }
-        if (newName === old) return;
-        const n = await store.renameTagInCategory(state.mCat, old, newName);
-        state.prompts = await store.getPrompts();
-        if (state.sceneTag === old) state.sceneTag = newName;
-        if (state.mTag === old) state.mTag = newName;
-        renderManageFilters();
-        renderSceneRow();
-        refresh();
-        refreshManage();
-        await renderTagmList();
-        toast('已重命名，影响 ' + n + ' 条');
-      });
-    });
-    list.querySelectorAll('.tagm-del').forEach((b) => {
-      b.addEventListener('click', async () => {
-        const t = b.dataset.tag;
-        const n = tagCounts[t];
-        if (!confirm('确定删除标签「' + t + '」？将从该分类下 ' + n + ' 条提示词中移除（不删除提示词本身）。')) return;
-        const cnt = await store.deleteTagInCategory(state.mCat, t);
-        state.prompts = await store.getPrompts();
-        if (state.sceneTag === t) state.sceneTag = null;
-        if (state.mTag === t) state.mTag = null;
-        renderManageFilters();
-        renderSceneRow();
-        refresh();
-        refreshManage();
-        await renderTagmList();
-        toast('已删除，影响 ' + cnt + ' 条');
-      });
-    });
-  }
-
-  // 新建标签：标签存在于提示词上，所以把新标签挂到当前分类下第一条提示词
-  async function addTagToFirstPrompt(tagName) {
-    const target = state.prompts.find((p) => p.categoryId === state.mCat);
-    if (!target) { toast('该分类下还没有提示词，请先创建一条'); return; }
-    const tags = target.tags || [];
-    if (tags.indexOf(tagName) >= 0) { toast('该标签已存在'); return; }
-    tags.push(tagName);
-    await store.savePrompt({ id: target.id, tags: tags });
-    state.prompts = await store.getPrompts();
-    renderManageFilters();
-    renderSceneRow();
-    refresh();
-    refreshManage();
-    await renderTagmList();
-    toast('已新建标签「' + tagName + '」');
-  }
-
-  // ---------- 显示设置面板 ----------
-  const SETTING_RANGE_MAX = 20;   // 滑块上限（输入框可超过，最高 50）
+  // ---------- 显示设置 ----------
+  const SETTING_RANGE_MAX = 20;
   function openSettingsSheet() {
     const cc = state.settings.displayCatCount || 0;
     const tc = state.settings.displayTagCount || 0;
@@ -876,19 +733,14 @@
     syncThemeSeg();
     $('#settings-sheet').hidden = false;
   }
-  // 同步主题分段按钮的高亮态
   function syncThemeSeg() {
     const cur = state.settings.theme || 'auto';
-    document.querySelectorAll('#set-theme .seg').forEach((s) => {
-      s.classList.toggle('active', s.dataset.theme === cur);
-    });
+    document.querySelectorAll('#set-theme .seg').forEach((s) => s.classList.toggle('active', s.dataset.theme === cur));
   }
   function closeSettingsSheet() { $('#settings-sheet').hidden = true; }
   function bindSettingPair(rangeId, numId) {
     const r = $(rangeId), n = $(numId);
-    // 滑块 → 输入框
     r.addEventListener('input', () => { n.value = r.value; });
-    // 输入框 → 滑块（超过上限则钳到上限位置）
     n.addEventListener('input', () => {
       let v = parseInt(n.value, 10);
       if (isNaN(v) || v < 0) v = 0;
@@ -949,13 +801,12 @@
     state.pendingImport = null;
     state.prompts = await store.getPrompts();
     state.categories = await store.getCategories();
-    renderCategoryChips(); renderManageFilters();
-    refresh(); refreshManage();
-    // 提示：替换/新增/覆盖
+    renderCategoryChips();
+    renderSceneRow();
+    refresh();
     let msg;
-    if (mode === 'replace') {
-      msg = '已替换全部数据（' + result.added + ' 条）';
-    } else {
+    if (mode === 'replace') msg = '已替换全部数据（' + result.added + ' 条）';
+    else {
       const parts = [];
       if (result.added) parts.push('新增 ' + result.added);
       if (result.updated) parts.push('覆盖 ' + result.updated);
@@ -973,11 +824,8 @@
     toastTimer = setTimeout(() => { elToast.classList.remove('show'); setTimeout(() => { elToast.hidden = true; }, 220); }, 1600);
   }
 
-  // ---------- 事件绑定 ----------
-  // 视图切换
-  $$('.tab').forEach((t) => t.addEventListener('click', () => switchView(t.dataset.view)));
-
-  // 使用视图：搜索
+  // ==================== 事件绑定 ====================
+  // 列表搜索
   let searchDebounce = null;
   elSearch.addEventListener('input', () => {
     state.query = elSearch.value; state.selectedIndex = 0;
@@ -985,52 +833,54 @@
   });
   elClear.addEventListener('click', () => { elSearch.value = ''; state.query = ''; state.selectedIndex = 0; refresh(); elSearch.focus(); });
   elFilters.addEventListener('click', (e) => { const chip = e.target.closest('.chip'); if (chip) selectFilter(chip.dataset.filter); });
-  // 使用视图：场景标签切换
   $('#scene-row').addEventListener('click', (e) => {
     const chip = e.target.closest('.chip');
-    if (!chip) return;
-    // 展开/收起按钮
-    if (chip.classList.contains('expand-btn')) {
-      state.tagExpanded = !state.tagExpanded;
-      renderSceneRow();
+    if (!chip) {
+      const mgr = e.target.closest('#btn-manage-tag-inline');
+      if (mgr) openTagmSheet();
       return;
     }
+    if (chip.classList.contains('expand-btn')) { state.tagExpanded = !state.tagExpanded; renderSceneRow(); return; }
     state.sceneTag = state.sceneTag === chip.dataset.scene ? null : chip.dataset.scene;
     state.selectedIndex = 0;
     renderSceneRow();
     refresh();
   });
 
-  // 管理视图
-  let mDebounce = null;
-  $('#m-search').addEventListener('input', (e) => { state.mQuery = e.target.value.trim(); clearTimeout(mDebounce); mDebounce = setTimeout(refreshManage, 100); });
-  $('#btn-new').addEventListener('click', () => openEditor(null));
+  // 新建 + 设置
+  $('#btn-new').addEventListener('click', () => openDetail(null));
+  $('#btn-settings').addEventListener('click', openSettingsSheet);
+  $('#set-theme').addEventListener('click', async (e) => {
+    const seg = e.target.closest('.seg');
+    if (!seg) return;
+    state.settings = await store.saveSettings({ theme: seg.dataset.theme });
+    applyTheme();
+    syncThemeSeg();
+  });
 
-  // 编辑器
-  $('#editor-back').addEventListener('click', closeEditor);
-  $('#editor-save').addEventListener('click', savePromptFromForm);
-  $('#editor-delete').addEventListener('click', deleteCurrent);
+  // 详情页
+  $('#detail-back').addEventListener('click', closeDetail);
+  $('#detail-delete').addEventListener('click', deleteCurrent);
+  $('#detail-save').addEventListener('click', savePromptFromForm);
   $('#prompt-form').content.addEventListener('input', updateVarPreview);
   $('#add-category').addEventListener('click', () => openCategoryModal(null));
+  $$('.mode-tab').forEach((t) => t.addEventListener('click', () => switchDetailMode(t.dataset.mode)));
 
-  // 模型下拉框：触发器开关 + 面板内勾选 + 折叠
+  // 模型下拉框
   $('#mp-trigger').addEventListener('click', () => {
     const panel = $('#mp-panel');
     const open = panel.hidden;
     panel.hidden = !open;
     $('#mp-trigger').classList.toggle('open', open);
   });
-  // 点击外部关闭下拉
   document.addEventListener('click', (e) => {
     const dd = $('#mp-dropdown');
-    if (!dd.hidden !== undefined && !$('#mp-panel').hidden && !dd.contains(e.target)) {
+    if (!$('#mp-panel').hidden && !dd.contains(e.target)) {
       $('#mp-panel').hidden = true;
       $('#mp-trigger').classList.remove('open');
     }
   });
-  // 面板内交互（事件委托）
   $('#mp-panel').addEventListener('click', (e) => {
-    // 折叠/展开某公司
     const toggle = e.target.closest('.mp-company-toggle');
     if (toggle) {
       const models = toggle.parentElement.nextElementSibling;
@@ -1040,23 +890,35 @@
   });
   $('#mp-panel').addEventListener('change', (e) => {
     const t = e.target;
-    // 一级：公司全选
     if (t.classList.contains('mp-company-all')) {
       const co = t.dataset.company;
       PH.models.idsOfCompany(co).forEach((id) => {
         if (t.checked) state.editorModels[id] = true;
         else delete state.editorModels[id];
       });
-      renderModelPanel();   // 重渲染更新二级勾选态
+      renderModelPanel();
       return;
     }
-    // 二级：单个模型
     if (t.classList.contains('mp-model-cb')) {
       if (t.checked) state.editorModels[t.dataset.id] = true;
       else delete state.editorModels[t.dataset.id];
-      renderModelPanel();   // 重渲染更新一级全选态/计数
+      renderModelPanel();
       return;
     }
+  });
+
+  // 分类管理面板
+  $('#catm-back').addEventListener('click', () => { $('#catm-sheet').hidden = true; });
+  $('#catm-add').addEventListener('click', () => openCategoryModal(null));
+  // 标签管理面板
+  $('#tagm-back').addEventListener('click', () => { $('#tagm-sheet').hidden = true; });
+  $('#tagm-add').addEventListener('click', () => {
+    const cat = state.categories.find((c) => c.id === state.activeFilter);
+    const name = prompt('在分类「' + (cat ? cat.name : '') + '」下新建标签：标签需关联到提示词。\n\n请输入标签名，将添加到该分类下第一条提示词：');
+    if (name == null) return;
+    const t = String(name).trim();
+    if (!t) { toast('标签名不能为空'); return; }
+    addTagToFirstPrompt(t);
   });
 
   // 分类弹层
@@ -1065,27 +927,8 @@
   $('#cat-save').addEventListener('click', saveCategory);
   $('#cat-overlay').addEventListener('click', (e) => { if (e.target === $('#cat-overlay')) $('#cat-overlay').hidden = true; });
 
-  // 分类管理面板
-  $('#btn-manage-cat').addEventListener('click', openCatmSheet);
-  $('#catm-back').addEventListener('click', () => { $('#catm-sheet').hidden = true; });
-  $('#catm-add').addEventListener('click', () => openCategoryModal(null));
-
-  // 标签管理面板
-  $('#btn-manage-tag').addEventListener('click', openTagmSheet);
-  $('#tagm-back').addEventListener('click', () => { $('#tagm-sheet').hidden = true; });
-  $('#tagm-add').addEventListener('click', () => {
-    // 新建标签：往当前分类下的某条提示词追加，或提示在编辑时添加
-    const cat = state.categories.find((c) => c.id === state.mCat);
-    const name = prompt('在分类「' + (cat ? cat.name : '') + '」下新建标签：标签需关联到提示词。\n\n请输入标签名，将添加到该分类下第一条提示词：');
-    if (name == null) return;
-    const t = String(name).trim();
-    if (!t) { toast('标签名不能为空'); return; }
-    addTagToFirstPrompt(t);
-  });
-
-  // 显示设置面板
+  // 设置面板
   $('#settings-back').addEventListener('click', closeSettingsSheet);
-  $('#settings-save').addEventListener('click', saveDisplaySettings);
   bindSettingPair('#set-cat-range', '#set-cat-count');
   bindSettingPair('#set-tag-range', '#set-tag-count');
 
@@ -1104,48 +947,48 @@
   $('#modal-insert').addEventListener('click', () => confirmModal('insert'));
   $('#modal-body').addEventListener('input', updatePreview);
 
-  // 顶栏设置按钮（打开显示设置面板）
-  $('#btn-settings').addEventListener('click', openSettingsSheet);
-
-  // 设置面板：主题切换（分段按钮）
-  $('#set-theme').addEventListener('click', async (e) => {
-    const seg = e.target.closest('.seg');
-    if (!seg) return;
-    const theme = seg.dataset.theme;
-    state.settings = await store.saveSettings({ theme: theme });
-    applyTheme();
-    syncThemeSeg();
-  });
-
   // 全局键盘
   document.addEventListener('keydown', (e) => {
+    // Ctrl+K 聚焦搜索
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
-      (state.view === 'manage' ? $('#m-search') : elSearch).focus();
-      (state.view === 'manage' ? $('#m-search') : elSearch).select();
+      if (!$('#detail-sheet').hidden) { if (state.detailMode === 'edit') $('#prompt-form').title.focus(); }
+      else { elSearch.focus(); elSearch.select(); }
       return;
     }
+    // 详情页内：E 切换预览/编辑
+    if (!$('#detail-sheet').hidden) {
+      const tag = (document.activeElement && document.activeElement.tagName) || '';
+      const inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (document.activeElement && document.activeElement.isContentEditable);
+      if (!inField && (e.key === 'e' || e.key === 'E')) {
+        e.preventDefault();
+        switchDetailMode(state.detailMode === 'edit' ? 'preview' : 'edit');
+        return;
+      }
+      // Ctrl+Enter 保存（编辑模式）
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); savePromptFromForm(); return; }
+    }
     if (e.key === 'Escape') {
-      if (!$('#editor-sheet').hidden) { closeEditor(); return; }
-      if (!$('#settings-sheet').hidden) { closeSettingsSheet(); return; }
+      if (!$('#detail-sheet').hidden) { closeDetail(); return; }
       if (!$('#catm-sheet').hidden) { $('#catm-sheet').hidden = true; return; }
       if (!$('#tagm-sheet').hidden) { $('#tagm-sheet').hidden = true; return; }
+      if (!$('#settings-sheet').hidden) { closeSettingsSheet(); return; }
       if (!$('#modal-overlay').hidden) { closeVariableModal(); return; }
       if (!$('#cat-overlay').hidden) { $('#cat-overlay').hidden = true; return; }
       if (!$('#import-overlay').hidden) { $('#import-overlay').hidden = true; return; }
     }
-    // 使用视图列表导航
-    if (state.view === 'use' && $('#editor-sheet').hidden) {
+    // 列表键盘导航
+    if ($('#detail-sheet').hidden && $('#catm-sheet').hidden && $('#tagm-sheet').hidden && $('#settings-sheet').hidden) {
       const a = document.activeElement;
       if (a === elSearch || a === elResults || a === document.body) {
         if (e.key === 'ArrowDown') { e.preventDefault(); selectIndex(state.selectedIndex + 1); }
         else if (e.key === 'ArrowUp') { e.preventDefault(); selectIndex(state.selectedIndex - 1); }
-        else if (e.key === 'Enter') { e.preventDefault(); const p = state.results[state.selectedIndex]; if (p) usePrompt(p, 'default'); }
+        else if (e.key === 'Enter') {
+          e.preventDefault();
+          const p = state.results[state.selectedIndex];
+          if (p) openDetail(p);
+        }
       }
-    }
-    // 编辑器内 Cmd/Ctrl+Enter 保存
-    if (!$('#editor-sheet').hidden && (e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault(); savePromptFromForm();
     }
   });
 

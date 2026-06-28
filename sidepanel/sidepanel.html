@@ -11,25 +11,22 @@
   <div id="icon-sprite"></div>
 
   <div class="app">
-    <!-- 顶栏：品牌 + 视图切换 + 主题 -->
+    <!-- 顶栏：品牌 + 新建 + 设置 -->
     <header class="topbar">
       <div class="brand">
         <svg class="ic ic-lg"><use href="#ic-bolt"/></svg>
         <span class="title">PromptFlash</span>
       </div>
       <div class="top-actions">
-        <div class="view-switch">
-          <button class="tab active" data-view="use" title="使用：搜索与使用提示词">使用</button>
-          <button class="tab" data-view="manage" title="管理：增删改查">管理</button>
-        </div>
+        <button class="icon-btn primary-icon" id="btn-new" title="新建提示词"><svg class="ic"><use href="#ic-plus"/></svg></button>
         <button id="btn-settings" class="icon-btn" title="显示设置" aria-label="设置">
           <svg class="ic"><use href="#ic-gear"/></svg>
         </button>
       </div>
     </header>
 
-    <!-- ========== 使用视图 ========== -->
-    <section class="view view-use active" id="view-use">
+    <!-- ========== 主列表页（唯一列表） ========== -->
+    <section class="view view-list" id="view-list">
       <div class="search-wrap">
         <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M15.5 14h-.8l-.3-.3a6.5 6.5 0 1 0-.7.7l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
         <input id="search" type="text" placeholder="搜索提示词…（支持拼音/首字母，如 xy）" autocomplete="off" spellcheck="false" />
@@ -48,39 +45,6 @@
 
       <footer class="statusbar">
         <span id="status-count">0 条</span>
-        <span class="hint">↑↓ 选择 · Enter 使用 · Ctrl+K 聚焦搜索</span>
-      </footer>
-    </section>
-
-    <!-- ========== 管理视图 ========== -->
-    <section class="view view-manage" id="view-manage" hidden>
-      <div class="manage-head">
-        <div class="search-box">
-          <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M15.5 14h-.8l-.3-.3a6.5 6.5 0 1 0-.7.7l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14z"/></svg>
-          <input id="m-search" type="text" placeholder="搜索…" autocomplete="off" />
-        </div>
-        <button class="icon-btn primary-icon" id="btn-new" title="新建提示词"><svg class="ic"><use href="#ic-plus"/></svg></button>
-      </div>
-
-      <div class="manage-filters">
-        <div class="chip-group">
-          <span class="chip-label">分类</span>
-          <div class="chip-row" id="m-cat-row">
-            <button class="m-chip cat-chip active" data-mcat="all">全部 <span class="cnt" id="m-cat-all">0</span></button>
-          </div>
-          <button class="manage-tiny-btn" id="btn-manage-cat" title="管理分类（增删改）"><svg class="ic"><use href="#ic-gear"/></svg> 管理分类</button>
-        </div>
-        <div class="chip-group" id="m-tag-group" hidden>
-          <span class="chip-label">场景</span>
-          <div class="chip-row" id="m-tag-row"></div>
-          <button class="manage-tiny-btn" id="btn-manage-tag" title="管理当前分类的标签（增删改）"><svg class="ic"><use href="#ic-gear"/></svg> 管理标签</button>
-        </div>
-      </div>
-
-      <main class="manage-list" id="manage-list"></main>
-
-      <footer class="statusbar">
-        <span id="m-count">0 条</span>
         <span class="io">
           <button class="link-btn" id="btn-export"><svg class="ic"><use href="#ic-export"/></svg> 导出</button>
           <button class="link-btn" id="btn-import"><svg class="ic"><use href="#ic-import"/></svg> 导入</button>
@@ -89,14 +53,24 @@
       </footer>
     </section>
 
-    <!-- ========== 编辑器（全屏覆盖） ========== -->
-    <div class="sheet" id="editor-sheet" hidden>
+    <!-- ========== 提示词详情页（预览/编辑双模式） ========== -->
+    <div class="sheet" id="detail-sheet" hidden>
       <div class="sheet-head">
-        <button class="icon-btn" id="editor-back" title="返回" aria-label="返回"><svg class="ic"><use href="#ic-back"/></svg></button>
-        <span id="editor-title" class="sheet-title">新建提示词</span>
-        <button class="btn-mini danger-text" id="editor-delete" hidden>删除</button>
+        <button class="icon-btn" id="detail-back" title="返回" aria-label="返回"><svg class="ic"><use href="#ic-back"/></svg></button>
+        <span id="detail-title" class="sheet-title">提示词</span>
+        <button class="btn-mini danger-text" id="detail-delete" hidden>删除</button>
       </div>
-      <form class="sheet-body" id="prompt-form" autocomplete="off">
+      <!-- 模式切换 -->
+      <div class="mode-switch">
+        <button class="mode-tab active" id="mode-edit" data-mode="edit" title="编辑（按 E 切换）"><svg class="ic"><use href="#ic-manage"/></svg> 编辑</button>
+        <button class="mode-tab" id="mode-preview" data-mode="preview" title="预览（按 E 切换）"><svg class="ic"><use href="#ic-search"/></svg> 预览</button>
+      </div>
+
+      <!-- 预览模式 -->
+      <div class="detail-body detail-preview" id="detail-preview" hidden></div>
+
+      <!-- 编辑模式 -->
+      <form class="detail-body detail-edit" id="prompt-form" autocomplete="off">
         <div class="field">
           <label>标题 <span class="req">*</span></label>
           <input name="title" required placeholder="给这个提示词起个名字" />
@@ -137,30 +111,8 @@
           <label>检测到的变量</label>
           <div class="var-preview" id="var-preview"><span class="muted">暂无变量</span></div>
         </div>
+        <button type="button" class="btn primary block" id="detail-save">保存</button>
       </form>
-      <div class="sheet-foot">
-        <button class="btn primary block" id="editor-save">保存</button>
-      </div>
-    </div>
-
-    <!-- ========== 分类小弹层（新建/编辑单个分类） ========== -->
-    <div class="modal-overlay" id="cat-overlay" hidden>
-      <div class="modal small">
-        <div class="modal-head">
-          <span id="cat-overlay-title">新建/编辑分类</span>
-          <button class="icon-btn" id="cat-close" aria-label="关闭"><svg class="ic"><use href="#ic-close"/></svg></button>
-        </div>
-        <div class="modal-body">
-          <div class="field">
-            <label>分类名称 <span class="req">*</span></label>
-            <input id="cat-name" placeholder="如：写作" />
-          </div>
-        </div>
-        <div class="modal-actions">
-          <button class="btn ghost" id="cat-cancel">取消</button>
-          <button class="btn primary" id="cat-save">保存</button>
-        </div>
-      </div>
     </div>
 
     <!-- ========== 分类管理面板（全屏） ========== -->
@@ -198,14 +150,14 @@
             <button type="button" class="seg" data-theme="dark">暗色</button>
           </div>
         </div>
-        <div class="setting-hint">设置「使用界面」筛选区默认展示多少条分类和标签。超出部分仍可通过搜索访问，0 表示全部展示。</div>
+        <div class="setting-hint">设置筛选区默认展示多少条分类和标签。超出部分仍可搜索访问，0 表示全部展示。</div>
         <div class="setting-item">
           <div class="setting-label">
             <span>默认展示分类数</span>
             <input type="number" class="setting-num" id="set-cat-count" min="0" max="50" />
           </div>
           <input type="range" class="setting-range" id="set-cat-range" min="0" max="20" />
-          <div class="setting-desc">使用界面顶部分类筛选区默认显示的条数</div>
+          <div class="setting-desc">分类筛选区默认显示的条数</div>
         </div>
         <div class="setting-item">
           <div class="setting-label">
@@ -213,11 +165,28 @@
             <input type="number" class="setting-num" id="set-tag-count" min="0" max="50" />
           </div>
           <input type="range" class="setting-range" id="set-tag-range" min="0" max="20" />
-          <div class="setting-desc">使用界面场景标签行默认显示的条数</div>
+          <div class="setting-desc">场景标签行默认显示的条数</div>
         </div>
       </div>
-      <div class="sheet-foot">
-        <button class="btn primary block" id="settings-save">保存</button>
+    </div>
+
+    <!-- ========== 分类小弹层（新建/编辑单个分类） ========== -->
+    <div class="modal-overlay" id="cat-overlay" hidden>
+      <div class="modal small">
+        <div class="modal-head">
+          <span id="cat-overlay-title">新建/编辑分类</span>
+          <button class="icon-btn" id="cat-close" aria-label="关闭"><svg class="ic"><use href="#ic-close"/></svg></button>
+        </div>
+        <div class="modal-body">
+          <div class="field">
+            <label>分类名称 <span class="req">*</span></label>
+            <input id="cat-name" placeholder="如：写作" />
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn ghost" id="cat-cancel">取消</button>
+          <button class="btn primary" id="cat-save">保存</button>
+        </div>
       </div>
     </div>
 
