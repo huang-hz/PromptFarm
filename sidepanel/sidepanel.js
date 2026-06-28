@@ -100,7 +100,7 @@
 
   // ========== 列表筛选区 ==========
   function renderCategoryChips() {
-    elFilters.querySelectorAll('.chip[data-category], .chip.expand-btn, .manage-tiny-btn').forEach((c) => c.remove());
+    elFilters.querySelectorAll('.cat-chip, .expand-btn, .manage-tiny-btn').forEach((c) => c.remove());
     const limit = state.settings.displayCatCount || 0;
     const needCollapse = limit > 0 && state.categories.length > limit;
     const showAll = !needCollapse || state.catExpanded;
@@ -116,7 +116,7 @@
     });
     if (needCollapse) {
       const t = document.createElement('button');
-      t.className = 'chip expand-btn';
+      t.className = 'expand-btn';
       const expanded = state.catExpanded;
       t.title = expanded ? '收起' : ('展开（还有 ' + (state.categories.length - limit) + ' 个）');
       t.innerHTML = icon(expanded ? 'collapse' : 'expand');
