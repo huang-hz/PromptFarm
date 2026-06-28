@@ -30,7 +30,14 @@
     editorModels: {},            // { [modelId]: true }
     // 分类/标签管理
     editingCategoryId: null,
-    pendingImport: null
+    pendingImport: null,
+    // 批量删除：筛选项 + 卡片勾选（"__null__" 代表未分类）
+    batchSelCats: {},
+    batchSelTags: {},
+    batchChecked: {},
+    // 回收站
+    trash: [],
+    trashHoverTimer: null
   };
 
   // ---------- DOM ----------
@@ -58,10 +65,12 @@
     state.settings = await store.getSettings();
     state.categories = await store.getCategories();
     state.prompts = await store.getPrompts();
+    state.trash = await store.getTrash();
     applyTheme();
     renderCategoryChips();
     renderSceneRow();
     refresh();
+    updateTrashCount();
     elSearch.focus();
 
     chrome.storage.onChanged.addListener((changes, area) => {
@@ -69,6 +78,11 @@
       let needRefresh = false;
       if (changes[store.KEYS.prompts]) { state.prompts = changes[store.KEYS.prompts].newValue || []; needRefresh = true; }
       if (changes[store.KEYS.categories]) { state.categories = changes[store.KEYS.categories].newValue || []; renderCategoryChips(); renderSceneRow(); needRefresh = true; }
+      if (changes[store.KEYS.trash]) {
+        state.trash = changes[store.KEYS.trash].newValue || [];
+        updateTrashCount();
+        if (!$('#trash-sheet').hidden) renderTrashList();
+      }
       if (changes[store.KEYS.settings]) {
         state.settings = Object.assign(state.settings, changes[store.KEYS.settings].newValue);
         applyTheme();
@@ -298,7 +312,7 @@
         (descText ? '<div class="' + descClass + '">' + escapeHtml(descText) + '</div>' : '') +
         (tags ? '<div class="result-tags">' + tags + '</div>' : '') +
         (p.models && p.models.length ? '<div class="result-models">' + modelBadges(p.models, 2, true) + '</div>' : '') +
-        '<div class="result-meta">' + (hasVar ? '<span>' + icon('variable') + ' 含变量</span>' : '') + (p.usageCount ? '<span>用 ' + p.usageCount + ' 次</span>' : '') + '</div>' +
+        '<div class="result-meta">' + (hasVar ? '<span>{含变量}</span>' : '') + (p.usageCount ? '<span>用 ' + p.usageCount + ' 次</span>' : '') + '</div>' +
         '<div class="result-actions">' +
           '<button class="mini-btn act-copy">' + icon('copy') + ' 复制</button>' +
           '<button class="mini-btn act-insert">' + icon('insert') + ' 插入</button>' +
@@ -491,14 +505,16 @@
   }
   async function deleteCurrent() {
     if (!state.editingId) return;
-    if (!await showConfirm('确定删除该提示词？此操作不可撤销。')) return;
+    if (!await showConfirm('确定删除该提示词？\n将移到回收站，可在回收站还原。')) return;
     await store.deletePrompt(state.editingId);
     state.prompts = await store.getPrompts();
+    state.trash = await store.getTrash();
     closeDetail();
     renderCategoryChips();
     renderSceneRow();
     refresh();
-    toast('已删除');
+    updateTrashCount();
+    toast('已移到回收站');
   }
 
   // ---------- 模型多选下拉框 ----------
@@ -839,6 +855,305 @@
     toast('显示设置已保存');
   }
 
+  // ---------- 批量删除（两级下拉筛选：分类→标签，勾选要删的提示词） ----------
+  function openBatchSheet() {
+    state.batchSelCats = {};
+    state.batchSelTags = {};
+    state.batchChecked = {};
+    renderBatchFilterDropdown();
+    applyBatchFilter();          // 算出匹配集 → 默认全选 → 渲染列表+计数
+    $('#batch-sheet').hidden = false;
+  }
+  function closeBatchSheet() {
+    closeBatchFilterDropdown();
+    $('#batch-sheet').hidden = true;
+  }
+  // 渲染两级下拉面板：一级分类（含未分类），二级为该分类下标签
+  function renderBatchFilterDropdown() {
+    const panel = $('#bd-filter-panel');
+    // 按 prompt.categoryId 分桶；__null__ = 未分类
+    const byCat = { '__null__': [] };
+    state.categories.forEach((c) => { byCat[c.id] = []; });
+    state.prompts.forEach((p) => {
+      const k = p.categoryId ? p.categoryId : '__null__';
+      if (!byCat[k]) byCat[k] = [];
+      byCat[k].push(p);
+    });
+    // 构造分组列表：先真实分类，再未分类
+    const groups = state.categories.map((c) => ({ catId: c.id, name: c.name, prompts: byCat[c.id] || [] }));
+    if ((byCat['__null__'] || []).length) groups.push({ catId: '__null__', name: '未分类', prompts: byCat['__null__'] });
+    if (!state.prompts.length) { panel.innerHTML = '<div class="mp-empty">暂无提示词</div>'; updateBatchFilterLabel(); return; }
+    let html = '';
+    groups.forEach((g) => {
+      const catSel = !!state.batchSelCats[g.catId];
+      const total = g.prompts.length;
+      // 该分类下的标签计数（按使用次数倒序）
+      const tagCounts = {};
+      g.prompts.forEach((p) => (p.tags || []).forEach((t) => { tagCounts[t] = (tagCounts[t] || 0) + 1; }));
+      const tags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]);
+      // 该分类下被选中的标签数（决定标签部分态）
+      const tagSelCount = tags.filter((t) => state.batchSelTags[g.catId + '\u0000' + t]).length;
+      const partial = tagSelCount > 0 && tagSelCount < tags.length;
+      const expanded = catSel || tagSelCount > 0;    // 有选中则默认展开
+      html += '<div class="mp-company">';
+      html += '<div class="mp-company-head">';
+      html += '<input type="checkbox" class="mp-company-all bd-cat-cb" data-cat="' + escapeHtml(g.catId) + '"' + (catSel ? ' checked' : '') + ' />';
+      html += '<span class="mp-company-toggle" data-cat="' + escapeHtml(g.catId) + '">' +
+        icon('expand') + escapeHtml(g.name) +
+        (partial ? ' <em class="mp-partial">' + tagSelCount + '/' + tags.length + '</em>' :
+         (catSel ? ' <em class="mp-partial">✓</em>' :
+          (tagSelCount > 0 ? ' <em class="mp-partial">' + tagSelCount + '/' + tags.length + '</em>' : ''))) +
+        ' <em class="mp-cnt">' + total + '</em></span>';
+      html += '</div>';
+      html += '<div class="mp-models' + (expanded ? ' open' : '') + '">';
+      tags.forEach((t) => {
+        const tSel = !!state.batchSelTags[g.catId + '\u0000' + t];
+        html += '<label class="mp-model' + (tSel ? ' on' : '') + '">';
+        html += '<input type="checkbox" class="mp-model-cb bd-tag-cb" data-cat="' + escapeHtml(g.catId) + '" data-tag="' + escapeHtml(t) + '"' + (tSel ? ' checked' : '') + '>';
+        html += '<span>' + escapeHtml(t) + '</span><em class="mp-cnt">' + tagCounts[t] + '</em></label>';
+      });
+      if (!tags.length) html += '<div class="mp-models-empty">无标签</div>';
+      html += '</div></div>';
+    });
+    panel.innerHTML = html;
+    updateBatchFilterLabel();
+  }
+  // 触发器文案：统计选中的分类数 + 标签数
+  function updateBatchFilterLabel() {
+    const cats = Object.keys(state.batchSelCats).filter((k) => state.batchSelCats[k]).length;
+    const tags = Object.keys(state.batchSelTags).filter((k) => state.batchSelTags[k]).length;
+    const label = $('#bd-filter-label');
+    if (!cats && !tags) { label.textContent = '全部提示词'; return; }
+    const parts = [];
+    if (cats) parts.push(cats + ' 个分类');
+    if (tags) parts.push(tags + ' 个标签');
+    label.textContent = parts.join(' · ');
+  }
+  // 开关下拉面板
+  function toggleBatchFilterDropdown(open) {
+    const panel = $('#bd-filter-panel');
+    const willOpen = open == null ? panel.hidden : open;
+    panel.hidden = !willOpen;
+    $('#bd-filter-trigger').classList.toggle('open', willOpen);
+  }
+  function closeBatchFilterDropdown() {
+    $('#bd-filter-panel').hidden = true;
+    $('#bd-filter-trigger').classList.remove('open');
+  }
+  // 筛选语义（OR 叠加）：命中 = 该分类被选中，或（该提示词所在分类下其某个标签被选中）
+  function getBatchFiltered() {
+    const selCats = state.batchSelCats;
+    const selTags = state.batchSelTags;
+    const anySel = Object.keys(selCats).some((k) => selCats[k]) || Object.keys(selTags).some((k) => selTags[k]);
+    if (!anySel) return state.prompts.slice();   // 都没选 = 全部
+    return state.prompts.filter((p) => {
+      const ck = p.categoryId ? p.categoryId : '__null__';
+      if (selCats[ck]) return true;                       // 一级分类被选中 → 命中
+      return (p.tags || []).some((t) => selTags[ck + '\u0000' + t]);  // 该分类下某标签被选中
+    });
+  }
+
+  // 筛选条件变化后：匹配集 → 默认全选 → 渲染列表+计数
+  function applyBatchFilter() {
+    const list = getBatchFiltered();
+    state.batchChecked = {};
+    list.forEach((p) => { state.batchChecked[p.id] = true; });
+    renderBatchList(list);
+    updateBatchCount(list);
+  }
+  // 渲染匹配的提示词卡片（带右上角勾选框）
+  function renderBatchList(list) {
+    const box = $('#bd-list');
+    const catMap = {};
+    state.categories.forEach((c) => { catMap[c.id] = c; });
+    if (!list.length) {
+      box.innerHTML = '<div class="mgr-empty">' + icon('inbox', 'ic-xl') + '<div>没有匹配的提示词</div></div>';
+      return;
+    }
+    box.innerHTML = list.map((p) => {
+      const checked = state.batchChecked[p.id];
+      const cat = catMap[p.categoryId];
+      const tags = (p.tags || []).slice(0, 4).map((t) => '<span class="tag">' + escapeHtml(t) + '</span>').join('');
+      const descText = (p.description && p.description.trim()) ? p.description : (p.content || '');
+      const descClass = (p.description && p.description.trim()) ? 'result-desc' : 'result-desc result-desc-fallback';
+      return '<div class="bd-item' + (checked ? ' checked' : '') + '" data-id="' + escapeHtml(p.id) + '">' +
+        '<input type="checkbox" class="bd-cb"' + (checked ? ' checked' : '') + '>' +
+        '<div class="result-head"><span class="result-title">' + escapeHtml(p.title) + '</span>' +
+          (p.favorite ? '<span class="result-star">' + icon('star-fill') + '</span>' : '') + '</div>' +
+        (descText ? '<div class="' + descClass + '">' + escapeHtml(descText) + '</div>' : '') +
+        (tags ? '<div class="result-tags">' + tags + '</div>' : '') +
+        (p.models && p.models.length ? '<div class="result-models">' + modelBadges(p.models, 2, true) + '</div>' : '') +
+        '<div class="result-meta">' + (cat ? '<span>' + escapeHtml(cat.name) + '</span>' : '<span>未分类</span>') + '</div>' +
+      '</div>';
+    }).join('');
+    // 卡片勾选框：更新 state + 计数（不重渲染整列，避免抖动）
+    box.querySelectorAll('.bd-cb').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const item = cb.closest('.bd-item');
+        const id = item.dataset.id;
+        state.batchChecked[id] = cb.checked;
+        item.classList.toggle('checked', cb.checked);
+        updateBatchCount(getBatchFiltered());
+      });
+      // 点击卡片体也切换勾选
+      cb.closest('.bd-item').addEventListener('click', (e) => {
+        if (e.target === cb) return;
+        cb.checked = !cb.checked;
+        cb.dispatchEvent(new Event('change'));
+      });
+    });
+  }
+  function updateBatchCount(list) {
+    const total = list.length;
+    const checked = Object.keys(state.batchChecked).filter((id) => state.batchChecked[id] && list.some((p) => p.id === id)).length;
+    $('#bd-count').textContent = '匹配 ' + total + ' 条，勾选 ' + checked + ' 条';
+    $('#bd-delete').textContent = '删除勾选 (' + checked + ')';
+    $('#bd-delete').disabled = checked === 0;
+  }
+  // 全选/全不选当前匹配集
+  function batchSelectAll(on) {
+    const list = getBatchFiltered();
+    list.forEach((p) => { state.batchChecked[p.id] = on; });
+    $('#bd-list').querySelectorAll('.bd-item').forEach((item) => {
+      item.classList.toggle('checked', on);
+      const cb = item.querySelector('.bd-cb');
+      if (cb) cb.checked = on;
+    });
+    updateBatchCount(list);
+  }
+  // 删除勾选中的提示词
+  async function doBatchDelete() {
+    const list = getBatchFiltered();
+    const ids = list.filter((p) => state.batchChecked[p.id]).map((p) => p.id);
+    if (!ids.length) { toast('没有勾选任何提示词'); return; }
+    if (!await showConfirm('确定删除勾选的 ' + ids.length + ' 条提示词？\n将移到回收站，可在回收站还原。')) return;
+    await store.deletePrompts(ids);
+    state.prompts = await store.getPrompts();
+    state.trash = await store.getTrash();
+    refresh();
+    renderCategoryChips();
+    renderSceneRow();
+    closeBatchSheet();
+    updateTrashCount();
+    toast('已移到回收站 ' + ids.length + ' 条');
+  }
+
+  // ---------- 回收站（软删除提示词：还原 / 永久删除 / 悬浮预览） ----------
+  async function openTrashSheet() {
+    state.trash = await store.getTrash();
+    renderTrashList();
+    $('#trash-sheet').hidden = false;
+  }
+  function closeTrashSheet() {
+    hideTrashPreview();
+    $('#trash-sheet').hidden = true;
+  }
+  // 渲染回收站列表（最新删除在前）
+  function renderTrashList() {
+    const list = (state.trash || []).slice().sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0));
+    $('#trash-title').textContent = '回收站' + (list.length ? ' · ' + list.length : '');
+    $('#trash-empty').style.display = list.length ? '' : 'none';
+    const box = $('#trash-list');
+    if (!list.length) {
+      box.innerHTML = '<div class="mgr-empty">' + icon('trash', 'ic-xl') + '<div>回收站为空</div><div class="mgr-empty-sub">删除的提示词会暂存在这里</div></div>';
+      return;
+    }
+    const catMap = {};
+    state.categories.forEach((c) => { catMap[c.id] = c; });
+    box.innerHTML = '<div class="mgr-hint">悬浮查看内容；还原可恢复，永久删除不可撤销。</div>' +
+      list.map((p) => {
+        const cat = catMap[p.categoryId];
+        const tags = (p.tags || []).slice(0, 3).map((t) => '<span class="tag">' + escapeHtml(t) + '</span>').join('');
+        const t = p.deletedAt ? new Date(p.deletedAt) : null;
+        const when = t ? (t.getMonth() + 1) + '/' + t.getDate() + ' ' + String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0') : '';
+        return '<div class="mgr-item trash-item" data-id="' + escapeHtml(p.id) + '">' +
+          '<div class="mgr-main"><div class="mgr-name">' + escapeHtml(p.title || '（无标题）') + '</div>' +
+            '<div class="mgr-sub">' + (cat ? escapeHtml(cat.name) : '未分类') + (tags ? ' · ' + tags : '') + (when ? ' · 删于 ' + when : '') + '</div></div>' +
+          '<div class="mgr-actions">' +
+            '<button class="mini-btn trash-restore" data-id="' + escapeHtml(p.id) + '">' + icon('restore') + ' 还原</button>' +
+            '<button class="mini-btn trash-purge" data-id="' + escapeHtml(p.id) + '">永久删除</button>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    // 悬浮预览 + 行内操作
+    box.querySelectorAll('.trash-item').forEach((row) => {
+      row.addEventListener('mouseenter', () => scheduleTrashPreview(row.dataset.id, row));
+      row.addEventListener('mouseleave', hideTrashPreview);
+    });
+    box.querySelectorAll('.trash-restore').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); restoreFromTrash(b.dataset.id); }));
+    box.querySelectorAll('.trash-purge').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); purgeFromTrash(b.dataset.id); }));
+  }
+  // 悬浮气泡：延迟显示，避免快速划过闪烁
+  function scheduleTrashPreview(id, row) {
+    clearTimeout(state.trashHoverTimer);
+    state.trashHoverTimer = setTimeout(() => {
+      const p = (state.trash || []).find((x) => x.id === id);
+      if (!p) return;
+      const pv = $('#trash-preview');
+      pv.innerHTML = '<div class="trash-pv-title">' + escapeHtml(p.title || '（无标题）') + '</div>' +
+        '<div class="trash-pv-content">' + escapeHtml(p.content || '（无内容）') + '</div>';
+      positionTrashPreview(pv, row);
+      pv.hidden = false;
+    }, 350);
+  }
+  function hideTrashPreview() {
+    clearTimeout(state.trashHoverTimer);
+    $('#trash-preview').hidden = true;
+  }
+  // 锚定到条目右侧；右侧空间不足时改为下方
+  function positionTrashPreview(pv, row) {
+    const r = row.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    pv.style.maxHeight = Math.min(320, vh - 24) + 'px';
+    pv.style.left = '0px'; pv.style.top = '0px';   // 先显示以测宽高
+    pv.style.visibility = 'hidden'; pv.hidden = false;
+    const pw = pv.offsetWidth, ph = pv.offsetHeight;
+    pv.style.visibility = '';
+    let left = r.right + 10;
+    if (left + pw > vw - 8) left = r.left - pw - 10;   // 右侧放不下→尝试左侧
+    if (left < 8) { left = Math.max(8, Math.min(r.left, vw - pw - 8)); pv.style.top = (r.bottom + 8) + 'px'; }  // 左侧也放不下→下方
+    else { pv.style.top = Math.max(8, Math.min(r.top, vh - ph - 8)) + 'px'; }
+    pv.style.left = left + 'px';
+  }
+  async function restoreFromTrash(id) {
+    await store.restorePrompt(id);
+    state.trash = await store.getTrash();
+    state.prompts = await store.getPrompts();
+    renderTrashList();
+    refresh();
+    renderCategoryChips();
+    renderSceneRow();
+    updateTrashCount();
+    toast('已还原');
+  }
+  async function purgeFromTrash(id) {
+    const p = (state.trash || []).find((x) => x.id === id);
+    if (!await showConfirm('永久删除「' + (p ? p.title : '该提示词') + '」？此操作不可撤销。')) return;
+    await store.purgePrompt(id);
+    state.trash = await store.getTrash();
+    renderTrashList();
+    updateTrashCount();
+    toast('已永久删除');
+  }
+  async function emptyAllTrash() {
+    if (!state.trash || !state.trash.length) { toast('回收站已经是空的'); return; }
+    if (!await showConfirm('确定清空回收站的 ' + state.trash.length + ' 条提示词？此操作不可撤销。')) return;
+    await store.emptyTrash();
+    state.trash = [];
+    renderTrashList();
+    updateTrashCount();
+    toast('回收站已清空');
+  }
+  // 更新状态栏回收站计数徽章
+  function updateTrashCount() {
+    const n = (state.trash || []).length;
+    const el = $('#trash-count');
+    if (!el) return;
+    el.textContent = n;
+    el.hidden = n === 0;
+  }
+
+
   // ---------- 导入导出 ----------
   async function doExport() {
     const data = await store.exportAll();
@@ -1009,6 +1324,47 @@
   bindSettingPair('#set-cat-range', '#set-cat-count');
   bindSettingPair('#set-tag-range', '#set-tag-count');
 
+  // 批量删除面板
+  $('#btn-batch').addEventListener('click', openBatchSheet);
+  $('#batch-back').addEventListener('click', closeBatchSheet);
+  // 下拉框：触发器开关
+  $('#bd-filter-trigger').addEventListener('click', () => toggleBatchFilterDropdown(null));
+  // 点击外部关闭下拉
+  document.addEventListener('click', (e) => {
+    if (!$('#bd-filter-panel').hidden && !$('#bd-filter-dd').contains(e.target)) closeBatchFilterDropdown();
+  });
+  // 面板内：点分类名展开/折叠其标签
+  $('#bd-filter-panel').addEventListener('click', (e) => {
+    const toggle = e.target.closest('.mp-company-toggle');
+    if (!toggle) return;
+    const models = toggle.parentElement.nextElementSibling;
+    if (models) models.classList.toggle('open');
+  });
+  // 面板内复选变更：分类全选 / 标签单选
+  $('#bd-filter-panel').addEventListener('change', (e) => {
+    const t = e.target;
+    if (t.classList.contains('bd-cat-cb')) {
+      // 一级分类：选/不选该分类（不影响其下标签的独立勾选）
+      const c = t.dataset.cat;
+      if (t.checked) state.batchSelCats[c] = true; else delete state.batchSelCats[c];
+      renderBatchFilterDropdown();   // 重渲染以更新 ✓ 标记
+      applyBatchFilter();
+      return;
+    }
+    if (t.classList.contains('bd-tag-cb')) {
+      const c = t.dataset.cat, tg = t.dataset.tag;
+      const key = c + '\u0000' + tg;
+      if (t.checked) state.batchSelTags[key] = true; else delete state.batchSelTags[key];
+      renderBatchFilterDropdown();   // 重渲染以更新部分态标记
+      applyBatchFilter();
+      return;
+    }
+  });
+  // 全选 / 全不选 / 删除
+  $('#bd-select-all').addEventListener('click', () => batchSelectAll(true));
+  $('#bd-select-none').addEventListener('click', () => batchSelectAll(false));
+  $('#bd-delete').addEventListener('click', doBatchDelete);
+
   // 导入导出
   $('#btn-export').addEventListener('click', doExport);
   $('#btn-import').addEventListener('click', () => $('#import-file').click());
@@ -1016,6 +1372,11 @@
   $('#import-cancel').addEventListener('click', () => { $('#import-overlay').hidden = true; state.pendingImport = null; });
   $('#import-close').addEventListener('click', () => { $('#import-overlay').hidden = true; state.pendingImport = null; });
   $('#import-confirm').addEventListener('click', confirmImport);
+
+  // 回收站
+  $('#btn-trash').addEventListener('click', openTrashSheet);
+  $('#trash-back').addEventListener('click', closeTrashSheet);
+  $('#trash-empty').addEventListener('click', emptyAllTrash);
 
   // 变量弹层
   $('#modal-close').addEventListener('click', closeVariableModal);
@@ -1052,12 +1413,14 @@
       if (!$('#catm-sheet').hidden) { $('#catm-sheet').hidden = true; return; }
       if (!$('#tagm-sheet').hidden) { $('#tagm-sheet').hidden = true; return; }
       if (!$('#settings-sheet').hidden) { closeSettingsSheet(); return; }
+      if (!$('#batch-sheet').hidden) { closeBatchSheet(); return; }
+      if (!$('#trash-sheet').hidden) { closeTrashSheet(); return; }
       if (!$('#modal-overlay').hidden) { closeVariableModal(); return; }
       if (!$('#cat-overlay').hidden) { $('#cat-overlay').hidden = true; return; }
       if (!$('#import-overlay').hidden) { $('#import-overlay').hidden = true; return; }
     }
     // 列表键盘导航
-    if ($('#detail-sheet').hidden && $('#catm-sheet').hidden && $('#tagm-sheet').hidden && $('#settings-sheet').hidden) {
+    if ($('#detail-sheet').hidden && $('#catm-sheet').hidden && $('#tagm-sheet').hidden && $('#settings-sheet').hidden && $('#batch-sheet').hidden && $('#trash-sheet').hidden) {
       const a = document.activeElement;
       if (a === elSearch || a === elResults || a === document.body) {
         if (e.key === 'ArrowDown') { e.preventDefault(); selectIndex(state.selectedIndex + 1); }

@@ -18,6 +18,9 @@
         <span class="title">PromptFlash</span>
       </div>
       <div class="top-actions">
+        <button id="btn-batch" class="icon-btn" title="按分类/标签删除提示词" aria-label="批量删除">
+          <svg class="ic"><use href="#ic-batch"/></svg>
+        </button>
         <button id="btn-settings" class="icon-btn" title="显示设置" aria-label="设置">
           <svg class="ic"><use href="#ic-gear"/></svg>
         </button>
@@ -50,6 +53,7 @@
         <span class="io">
           <button class="link-btn" id="btn-export"><svg class="ic"><use href="#ic-export"/></svg> 导出</button>
           <button class="link-btn" id="btn-import"><svg class="ic"><use href="#ic-import"/></svg> 导入</button>
+          <button class="link-btn" id="btn-trash"><svg class="ic"><use href="#ic-trash"/></svg> 回收站<span class="trash-count" id="trash-count" hidden>0</span></button>
           <input type="file" id="import-file" accept=".json" hidden />
         </span>
       </footer>
@@ -173,7 +177,54 @@
       </div>
     </div>
 
-    <!-- ========== 分类小弹层（新建/编辑单个分类） ========== -->
+    <!-- ========== 批量删除面板（按分类+标签筛选，勾选要删除的提示词） ========== -->
+    <div class="sheet" id="batch-sheet" hidden>
+      <div class="sheet-head">
+        <button class="icon-btn" id="batch-back" title="返回" aria-label="返回"><svg class="ic"><use href="#ic-back"/></svg></button>
+        <span class="sheet-title" id="batch-title">批量删除</span>
+      </div>
+      <div class="sheet-body" id="batch-body">
+        <!-- 筛选区：两级下拉（一级分类 → 二级标签），复用 .mp-dropdown/.mp-company 视觉 -->
+        <div class="bd-filters">
+          <div class="mp-dropdown" id="bd-filter-dd">
+            <button type="button" class="mp-trigger" id="bd-filter-trigger">
+              <span id="bd-filter-label">全部提示词</span>
+              <svg class="ic"><use href="#ic-expand"/></svg>
+            </button>
+            <div class="mp-panel" id="bd-filter-panel" hidden></div>
+          </div>
+        </div>
+        <!-- 统计 + 全选/全不选 -->
+        <div class="bd-count-row">
+          <span class="bd-count" id="bd-count">匹配 0 条，勾选 0 条</span>
+          <span class="bd-sel-links">
+            <a href="javascript:void(0)" id="bd-select-all">全选</a>
+            <span class="bd-sep">|</span>
+            <a href="javascript:void(0)" id="bd-select-none">全不选</a>
+          </span>
+        </div>
+        <div id="bd-list"></div>
+      </div>
+      <div class="bd-foot">
+        <button class="btn danger block" id="bd-delete">删除勾选 (0)</button>
+      </div>
+    </div>
+
+    <!-- ========== 回收站面板（软删除提示词：还原 / 永久删除） ========== -->
+    <div class="sheet" id="trash-sheet" hidden>
+      <div class="sheet-head">
+        <button class="icon-btn" id="trash-back" title="返回" aria-label="返回"><svg class="ic"><use href="#ic-back"/></svg></button>
+        <span class="sheet-title" id="trash-title">回收站</span>
+        <button class="icon-btn" id="trash-empty" title="清空回收站"><svg class="ic"><use href="#ic-trash"/></svg></button>
+      </div>
+      <div class="sheet-body" id="trash-body">
+        <div id="trash-list"></div>
+      </div>
+    </div>
+
+    <!-- ========== 回收站悬浮预览气泡 ========== -->
+    <div class="trash-preview" id="trash-preview" hidden></div>
+
     <div class="modal-overlay" id="cat-overlay" hidden>
       <div class="modal small">
         <div class="modal-head">

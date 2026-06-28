@@ -501,6 +501,33 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 .m-models { margin-top: 5px; }
 
 .sheet-foot { padding: 12px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
+
+/* ---------- 批量删除面板（复用 .mp-dropdown 两级下拉框 + .result-item 卡片） ---------- */
+/* 筛选区 */
+.bd-filters { padding-bottom: 10px; }
+/* 复用 .mp-trigger，覆盖其内部 label 选择器（原为 #mp-trigger-label） */
+#bd-filter-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; color: var(--text-soft); text-align: left; }
+/* 下拉面板内：分类行尾部的提示词计数 */
+.mp-cnt { font-style: normal; font-size: 10.5px; color: var(--text-faint); margin-left: auto; }
+.mp-empty { padding: 12px 8px; font-size: 12.5px; color: var(--text-faint); text-align: center; }
+.mp-models-empty { padding: 4px 6px; font-size: 11.5px; color: var(--text-faint); font-style: italic; }
+/* 统计行 + 全选/全不选 */
+.bd-count-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+.bd-count { font-size: 12.5px; color: var(--text-soft); }
+.bd-sel-links { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+.bd-sel-links a { color: var(--primary); text-decoration: none; }
+.bd-sel-links a:hover { text-decoration: underline; }
+.bd-sep { color: var(--text-faint); }
+/* 提示词卡片：复用 .result-item 视觉，带右上角勾选框 */
+.bd-item { position: relative; padding: 10px 36px 10px 12px; border-radius: var(--radius); cursor: pointer; border: 1px solid transparent; margin-bottom: 4px; transition: background 0.1s, border-color 0.1s; }
+.bd-item:hover { background: var(--bg-hover); }
+.bd-item.checked { background: var(--primary-soft); border-color: var(--primary); }
+.bd-cb { position: absolute; top: 10px; right: 10px; accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; margin: 0; }
+/* 底部操作区 */
+.bd-foot { flex-shrink: 0; padding: 12px 14px; border-top: 1px solid var(--border); }
+.bd-foot .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+
 .btn { height: 40px; border-radius: 9px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.12s; }
 .btn.block { width: 100%; }
 
@@ -602,3 +629,38 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 .toast[hidden] { display: none; }
 
 mark { background: var(--accent); color: #1a1a1a; border-radius: 2px; padding: 0 1px; }
+
+/* ============ 回收站 ============ */
+/* 状态栏计数徽章 */
+.trash-count {
+  display: inline-block; min-width: 15px; height: 15px; line-height: 15px;
+  text-align: center; background: var(--danger); color: #fff;
+  border-radius: 999px; font-size: 10px; font-weight: 600; padding: 0 4px;
+  margin-left: 4px; vertical-align: 1px;
+}
+.trash-count[hidden] { display: none; }
+/* 清空按钮（头部垃圾桶图标 hover 危险色） */
+#trash-empty:hover { color: var(--danger); }
+/* 行内：永久删除按钮危险色 / 还原按钮成功色 */
+.mini-btn.trash-purge { color: var(--danger); border-color: transparent; background: transparent; }
+.mini-btn.trash-purge:hover { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); }
+.mini-btn.trash-restore { color: var(--success); border-color: transparent; background: transparent; }
+.mini-btn.trash-restore:hover { background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.3); }
+/* 回收站空状态副文案 */
+.mgr-empty .mgr-empty-sub { font-size: 12px; color: var(--text-faint); margin-top: 4px; }
+
+/* 悬浮预览气泡：固定定位，z-index 高于 sheet(50) */
+.trash-preview {
+  position: fixed; z-index: 60;
+  max-width: 320px;
+  background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 10px 12px;
+  overflow-y: auto; pointer-events: none;
+}
+.trash-preview[hidden] { display: none; }
+.trash-pv-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.trash-pv-content {
+  font-family: var(--mono); font-size: 12px; line-height: 1.6;
+  white-space: pre-wrap; word-break: break-word; color: var(--text-soft);
+}
