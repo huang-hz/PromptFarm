@@ -100,7 +100,7 @@
 
   // ========== 列表筛选区 ==========
   function renderCategoryChips() {
-    elFilters.querySelectorAll('.chip[data-category], .chip.expand-btn').forEach((c) => c.remove());
+    elFilters.querySelectorAll('.chip[data-category], .chip.expand-btn, .manage-tiny-btn').forEach((c) => c.remove());
     const limit = state.settings.displayCatCount || 0;
     const needCollapse = limit > 0 && state.categories.length > limit;
     const showAll = !needCollapse || state.catExpanded;
