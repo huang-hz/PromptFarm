@@ -3,7 +3,7 @@ node_modules/
 
 # 备份文件（导出的提示词备份）
 *.bak
-prompthub-backup-*.json
+promptflash-backup-*.json
 
 # 系统垃圾文件
 .DS_Store
