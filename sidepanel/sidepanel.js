@@ -944,14 +944,24 @@
   async function confirmImport() {
     if (!state.pendingImport) return;
     const mode = $('#import-mode').value;
-    const n = await store.importAll(state.pendingImport, mode);
+    const result = await store.importAll(state.pendingImport, mode);
     $('#import-overlay').hidden = true;
     state.pendingImport = null;
     state.prompts = await store.getPrompts();
     state.categories = await store.getCategories();
     renderCategoryChips(); renderManageFilters();
     refresh(); refreshManage();
-    toast(mode === 'replace' ? '已替换全部数据' : '已导入 ' + n + ' 条');
+    // 提示：替换/新增/覆盖
+    let msg;
+    if (mode === 'replace') {
+      msg = '已替换全部数据（' + result.added + ' 条）';
+    } else {
+      const parts = [];
+      if (result.added) parts.push('新增 ' + result.added);
+      if (result.updated) parts.push('覆盖 ' + result.updated);
+      msg = parts.length ? '已' + parts.join('、') : '无变化（内容均相同）';
+    }
+    toast(msg);
   }
 
   // ---------- Toast ----------
