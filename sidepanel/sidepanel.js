@@ -112,9 +112,15 @@
   }
 
   // ---------- 主题 ----------
+  // 通过 body class 切换（theme-dark/theme-light），手动选择立即生效
   function applyTheme() {
     const t = state.settings.theme || 'auto';
-    document.body.style.colorScheme = (t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches)) ? 'dark' : 'light';
+    document.body.classList.remove('theme-dark', 'theme-light');
+    if (t === 'dark') document.body.classList.add('theme-dark');
+    else if (t === 'light') document.body.classList.add('theme-light');
+    // auto：不加 class，交给 CSS 媒体查询跟随系统
+    const dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.body.style.colorScheme = dark ? 'dark' : 'light';
   }
 
   // ========== 使用视图 ==========

@@ -17,8 +17,23 @@
   --shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
   --mono: ui-monospace, "SFMono-Regular", "Cascadia Code", Consolas, monospace;
 }
+/* 暗色变量：手动选暗色 OR 跟随系统(auto)且系统为暗 */
+.theme-dark {
+  --bg: #1a1b1e;
+  --bg-soft: #232529;
+  --bg-hover: #2c2e33;
+  --bg-sidebar: #161719;
+  --border: #33363c;
+  --text: #e8eaed;
+  --text-soft: #a0a6b0;
+  --text-faint: #6b7280;
+  --primary: #5b85ff;
+  --primary-soft: #1e2a4a;
+  --shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+/* auto 模式：跟随系统，且未被手动覆盖（无 theme-light/theme-dark） */
 @media (prefers-color-scheme: dark) {
-  :root {
+  body:not(.theme-light):not(.theme-dark) {
     --bg: #1a1b1e;
     --bg-soft: #232529;
     --bg-hover: #2c2e33;
