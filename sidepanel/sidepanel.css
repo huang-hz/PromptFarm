@@ -118,7 +118,6 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 }
 .mode-tab:hover { color: var(--text); }
 .mode-tab.active { background: var(--bg); color: var(--primary); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
-.mode-tab .ic { width: 14px; height: 14px; margin-right: 0; }
 
 /* 详情页主体 */
 .detail-body { flex: 1; overflow-y: auto; padding: 4px 14px 14px; }

@@ -382,7 +382,7 @@
       '<div class="pv-content">' + escapeHtml(p.content || '') + '</div>' +
       '<div class="pv-actions">' +
         '<button class="btn ghost pv-copy">' + icon('copy') + ' 复制</button>' +
-        '<button class="btn primary pv-insert">' + icon('insert') + ' 插入输入框</button>' +
+        '<button class="btn primary pv-insert">' + icon('insert') + ' 插入</button>' +
       '</div>';
     const realP = state.editingId ? state.prompts.find((x) => x.id === state.editingId) : p;
     box.querySelector('.pv-copy').addEventListener('click', () => usePrompt(realP || p, 'copy'));
