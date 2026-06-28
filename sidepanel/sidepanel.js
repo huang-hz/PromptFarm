@@ -183,7 +183,7 @@
     row.hidden = false;
     let html = shown.map((t) =>
       '<button class="chip tag-chip' + (state.sceneTag === t ? ' active' : '') + '" data-scene="' + escapeHtml(t) + '">' +
-        '<span class="hash">#</span>' + escapeHtml(t) + '<span class="cnt">' + tagCounts[t] + '</span></button>'
+        escapeHtml(t) + '<span class="cnt">' + tagCounts[t] + '</span></button>'
     ).join('');
     // 追加展开/收起按钮
     if (needCollapse) {
@@ -404,7 +404,7 @@
       } else {
         tagRow.innerHTML = tags.map((t) =>
           '<button class="m-chip tag-chip' + (state.mTag === t ? ' active' : '') + '" data-tag="' + escapeHtml(t) + '">' +
-            '<span class="hash">#</span>' + escapeHtml(t) + '<span class="cnt">' + tagCounts[t] + '</span></button>'
+            escapeHtml(t) + '<span class="cnt">' + tagCounts[t] + '</span></button>'
         ).join('');
         tagRow.querySelectorAll('.m-chip').forEach((c) => {
           c.addEventListener('click', () => { state.mTag = state.mTag === c.dataset.tag ? null : c.dataset.tag; renderManageFilters(); refreshManage(); });
@@ -700,7 +700,6 @@
       tags.map((t) =>
         '<div class="mgr-item" data-tag="' + escapeHtml(t) + '" draggable="true">' +
           '<span class="mgr-handle" title="拖动排序">' + icon('grip') + '</span>' +
-          '<span class="mgr-tag-ico">' + icon('hash') + '</span>' +
           '<div class="mgr-main"><div class="mgr-name">' + escapeHtml(t) + '</div>' +
             '<div class="mgr-sub">' + tagCounts[t] + ' 条提示词</div></div>' +
           '<div class="mgr-actions">' +

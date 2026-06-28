@@ -165,16 +165,16 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 .chip.icon-only { padding: 5px; }
 .chip.icon-only .ic { margin-right: 0; width: 15px; height: 15px; }
 
-/* 展开/收起按钮：虚线描边、纯图标，区别于普通筛选 chip */
+/* 展开/收起按钮：默认仅图标无边框，悬浮虚线变实线 */
 .chip.expand-btn {
   background: transparent;
-  border: 1px dashed var(--text-faint);
+  border: 1px solid transparent;
   color: var(--text-faint);
   padding: 5px;
   display: inline-flex; align-items: center; justify-content: center;
 }
 .chip.expand-btn .ic { width: 15px; height: 15px; margin-right: 0; }
-.chip.expand-btn:hover { color: var(--primary); border-color: var(--primary); border-style: solid; }
+.chip.expand-btn:hover { color: var(--primary); border-color: var(--primary); border-style: dashed; }
 
 /* === 分类 chip：默认中性，选中主色调 —— 突出大类 === */
 .chip.cat-chip, .m-chip.cat-chip {
