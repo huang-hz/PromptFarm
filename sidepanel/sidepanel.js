@@ -35,6 +35,7 @@
     // 编辑器
     editingId: null,
     editingCategoryId: null,
+    editorModels: {},             // { [modelId]: true } 当前选中的模型
     // 导入
     pendingImport: null
   };
@@ -219,6 +220,18 @@
   function icon(name, cls) {
     return '<svg class="ic' + (cls ? ' ' + cls : '') + '"><use href="#ic-' + name + '"/></svg>';
   }
+  // 模型徽章：把 models[] 渲染为小标签，最多显示 2 个 + 溢出计数
+  function modelBadges(models, max) {
+    max = max || 2;
+    if (!models || !models.length) return '';
+    const M = PH.models;
+    const shown = models.slice(0, max).map((id) => {
+      const { model } = M.parseId(id);
+      return '<span class="mbadge">' + escapeHtml(model) + '</span>';
+    }).join('');
+    const extra = models.length > max ? '<span class="mbadge mbadge-more">+' + (models.length - max) + '</span>' : '';
+    return '<span class="mbadges">' + shown + extra + '</span>';
+  }
   function highlight(text, q) {
     if (!q) return escapeHtml(text);
     const lower = String(text).toLowerCase();
@@ -252,6 +265,7 @@
         '</div>' +
         (p.description ? '<div class="result-desc">' + escapeHtml(p.description) + '</div>' : '') +
         (tags ? '<div class="result-tags">' + tags + '</div>' : '') +
+        (p.models && p.models.length ? '<div class="result-models">' + modelBadges(p.models) + '</div>' : '') +
         '<div class="result-meta">' + (hasVar ? '<span>' + icon('variable') + ' 含变量</span>' : '') + (p.usageCount ? '<span>用 ' + p.usageCount + ' 次</span>' : '') + '</div>' +
         '<div class="result-actions">' +
           '<button class="mini-btn act-copy">' + icon('copy') + ' 复制</button>' +
@@ -453,6 +467,7 @@
             (vars.length ? '<span class="m-var">' + vars.length + ' 变量</span>' : '') +
             (p.usageCount ? '<span class="m-use">用 ' + p.usageCount + ' 次</span>' : '') +
           '</div>' +
+          (p.models && p.models.length ? '<div class="m-models">' + modelBadges(p.models, 3) + '</div>' : '') +
         '</div>' +
         '<span class="chev">' + icon('chevron') + '</span>' +
       '</div>';
@@ -486,6 +501,10 @@
     form.categoryId.value = p ? (p.categoryId || '') : '';
     form.tags.value = p ? (p.tags || []).join(', ') : '';
     form.content.value = p ? p.content : '';
+    // 初始化模型选中状态
+    state.editorModels = {};
+    (p && p.models ? p.models : []).forEach((id) => { state.editorModels[id] = true; });
+    renderModelPicker();
     updateVarPreview();
     $('#editor-sheet').hidden = false;
     setTimeout(() => form.title.focus(), 50);
@@ -495,6 +514,52 @@
   function fillCategorySelect() {
     $('#form-category').innerHTML = '<option value="">（未分类）</option>' +
       state.categories.map((c) => '<option value="' + c.id + '">' + escapeHtml(c.name) + '</option>').join('');
+  }
+
+  // ---------- 模型多选器 ----------
+  // state.editorModels: { [modelId]: true } 当前编辑器选中的模型集合
+  function renderModelPicker() {
+    const M = PH.models;
+    const picker = $('#model-picker');
+    const regions = ['us', 'cn'];
+    let html = '';
+    regions.forEach((region) => {
+      const companies = M.companiesInRegion(region);
+      if (!companies.length) return;
+      html += '<div class="mp-region"><div class="mp-region-label">' + M.REGION_LABEL[region] + '</div>';
+      companies.forEach((co) => {
+        const allIds = co.models.map((m) => M.makeId(co.company, m));
+        const checkedCount = allIds.filter((id) => state.editorModels[id]).length;
+        const allChecked = checkedCount === allIds.length;
+        html += '<div class="mp-company">';
+        html += '<label class="mp-company-head">';
+        html += '<input type="checkbox" class="mp-company-all" data-company="' + escapeHtml(co.company) + '"' + (allChecked ? ' checked' : '') + ' />';
+        html += '<span>' + escapeHtml(co.company) + (checkedCount > 0 && !allChecked ? ' (' + checkedCount + '/' + allIds.length + ')' : '') + '</span>';
+        html += '</label>';
+        html += '<div class="mp-models">';
+        co.models.forEach((m) => {
+          const id = M.makeId(co.company, m);
+          const on = !!state.editorModels[id];
+          html += '<label class="mp-model' + (on ? ' on' : '') + '">';
+          html += '<input type="checkbox" class="mp-model-cb" data-id="' + escapeHtml(id) + '"' + (on ? ' checked' : '') + ' />';
+          html += '<span>' + escapeHtml(m) + '</span></label>';
+        });
+        html += '</div></div>';
+      });
+      html += '</div>';
+    });
+    picker.innerHTML = html;
+    updateModelCount();
+  }
+
+  function updateModelCount() {
+    const n = Object.keys(state.editorModels).filter((k) => state.editorModels[k]).length;
+    $('#model-count-hint').textContent = n > 0 ? ('已选 ' + n + ' 个') : '可选，勾选该提示词适用的模型';
+  }
+
+  // 把当前编辑器的选中模型收集为数组
+  function collectEditorModels() {
+    return Object.keys(state.editorModels).filter((k) => state.editorModels[k]);
   }
 
   function updateVarPreview() {
@@ -515,6 +580,7 @@
       description: form.description.value.trim(),
       categoryId: form.categoryId.value || null,
       tags: tags,
+      models: collectEditorModels(),
       content: form.content.value
     });
     state.prompts = await store.getPrompts();
@@ -895,6 +961,26 @@
   $('#editor-delete').addEventListener('click', deleteCurrent);
   $('#prompt-form').content.addEventListener('input', updateVarPreview);
   $('#add-category').addEventListener('click', () => openCategoryModal(null));
+
+  // 模型多选器：勾选交互（事件委托，因每次 openEditor 都重渲染）
+  $('#model-picker').addEventListener('change', (e) => {
+    const t = e.target;
+    // 公司全选
+    if (t.classList.contains('mp-company-all')) {
+      const co = t.dataset.company;
+      PH.models.idsOfCompany(co).forEach((id) => { state.editorModels[id] = t.checked; });
+      if (!t.checked) {
+        // 取消时清理（避免 editorModels 留 false 项干扰计数）
+        PH.models.idsOfCompany(co).forEach((id) => { delete state.editorModels[id]; });
+      }
+    }
+    // 单个模型
+    if (t.classList.contains('mp-model-cb')) {
+      if (t.checked) state.editorModels[t.dataset.id] = true;
+      else delete state.editorModels[t.dataset.id];
+    }
+    renderModelPicker();   // 重渲染以更新公司勾选态/计数
+  });
 
   // 分类弹层
   $('#cat-close').addEventListener('click', () => { $('#cat-overlay').hidden = true; });

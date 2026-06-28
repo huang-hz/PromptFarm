@@ -118,6 +118,12 @@
         </div>
         <div class="field">
           <label>
+            适配模型 <span class="hint" id="model-count-hint">可选，勾选该提示词适用的模型</span>
+          </label>
+          <div class="model-picker" id="model-picker"></div>
+        </div>
+        <div class="field">
+          <label>
             提示词内容 <span class="req">*</span>
             <span class="hint">变量：<code>{{变量名}}</code> <code>{{变量名=默认值}}</code> <code>{{变量名|提示}}</code></span>
           </label>
@@ -252,6 +258,7 @@
   <script src="../lib/fuzzy.js"></script>
   <script src="../lib/search.js"></script>
   <script src="../lib/template.js"></script>
+  <script src="../lib/models.js"></script>
   <script src="../lib/store.js"></script>
   <script src="../seed/seed-data.js"></script>
   <script src="sidepanel.js"></script>

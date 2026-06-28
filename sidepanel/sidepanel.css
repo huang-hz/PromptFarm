@@ -437,6 +437,43 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 .var-preview .var-pill { background: var(--primary-soft); color: var(--primary); border-radius: 6px; padding: 3px 9px; font-size: 11.5px; font-family: var(--mono); }
 .var-preview .muted { color: var(--text-faint); font-size: 12px; }
 
+/* ---------- 模型多选器 ---------- */
+.model-picker {
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg-soft); padding: 8px; max-height: 260px; overflow-y: auto;
+}
+.mp-region + .mp-region { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+.mp-region-label { font-size: 11px; font-weight: 700; color: var(--text-faint); letter-spacing: 0.5px; padding: 2px 4px 6px; text-transform: uppercase; }
+.mp-company { margin-bottom: 6px; }
+.mp-company-head {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 600; color: var(--text);
+  padding: 3px 4px; cursor: pointer; user-select: none;
+}
+.mp-company-head input { margin: 0; accent-color: var(--primary); cursor: pointer; }
+.mp-models { display: flex; flex-wrap: wrap; gap: 5px; padding: 4px 0 2px 22px; }
+.mp-model {
+  display: inline-flex; align-items: center; gap: 4px;
+  border: 1px solid var(--border); border-radius: 7px;
+  padding: 3px 8px; font-size: 12px; color: var(--text-soft);
+  cursor: pointer; transition: all 0.1s; background: var(--bg);
+}
+.mp-model input { margin: 0; accent-color: var(--primary); width: 13px; height: 13px; }
+.mp-model:hover { border-color: var(--text-faint); color: var(--text); }
+.mp-model.on { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); font-weight: 600; }
+
+/* ---------- 模型徽章（卡片/结果项展示） ---------- */
+.mbadges { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.mbadge {
+  font-size: 10.5px; font-weight: 500;
+  background: var(--bg-soft); border: 1px solid var(--border);
+  color: var(--text-soft); padding: 1px 6px; border-radius: 5px;
+  font-family: var(--mono); white-space: nowrap;
+}
+.mbadge-more { background: transparent; border-style: dashed; color: var(--text-faint); }
+.result-models { margin-top: 5px; }
+.m-models { margin-top: 5px; }
+
 .sheet-foot { padding: 12px 14px; border-top: 1px solid var(--border); flex-shrink: 0; }
 .btn { height: 40px; border-radius: 9px; border: none; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.12s; }
 .btn.block { width: 100%; }

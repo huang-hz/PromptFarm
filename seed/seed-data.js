@@ -19,6 +19,7 @@
       description: '快速生成正式的商务沟通邮件，支持指定主题、语气与收件对象。',
       categoryId: 'c_write',
       tags: ['邮件', '商务', '职场'],
+      models: ['OpenAI/GPT-5.5', 'Anthropic/Claude Fable 5', 'Zhipu/GLM-5.2'],
       favorite: true,
       content: '请帮我撰写一封商务邮件。\n主题：{{邮件主题|请输入邮件主题}}\n收件对象：{{收件人|如：客户 / 主管}}\n语气：{{语气|如：正式 / 友好 / 委婉=正式}}\n核心要点：\n{{要点|逐条列出要点}}\n\n要求：开头寒暄简短，正文条理清晰，结尾给出明确的下一步行动。'
     },
@@ -27,6 +28,7 @@
       description: '把一段文字改得更通顺、专业或更有感染力。',
       categoryId: 'c_write',
       tags: ['润色', '改写', '文案'],
+      models: ['Anthropic/Claude Opus 4.7', 'Alibaba/Qwen3.7-Max'],
       content: '请对以下文字进行润色改写，使其更{{风格|如：专业 / 生动 / 简洁}}，并保持原意不变：\n\n{{原文}}'
     },
     {
@@ -41,6 +43,7 @@
       description: '用通俗语言解释一段代码的作用与原理。',
       categoryId: 'c_code',
       tags: ['代码', '解释', '学习'],
+      models: ['OpenAI/GPT-5.5 Pro', 'Moonshot/Kimi K2.7 Code', 'DeepSeek/DeepSeek-V4-Pro'],
       favorite: true,
       content: '请解释下面这段{{语言|如：Python / JavaScript}}代码的作用，逐行说明关键逻辑，并指出可能的改进点：\n\n```\n{{代码}}\n```'
     },
@@ -56,6 +59,7 @@
       description: '分析 SQL 查询并给出性能优化建议。',
       categoryId: 'c_code',
       tags: ['SQL', '数据库', '优化'],
+      models: ['xAI/Grok 4.3', 'ByteDance/Doubao-Seed-2.0-Pro'],
       content: '请分析以下 SQL 查询，指出潜在的性能问题（如全表扫描、缺少索引、N+1 查询等），并给出优化后的 SQL 与索引建议：\n\n```sql\n{{SQL}}\n```'
     },
     {
