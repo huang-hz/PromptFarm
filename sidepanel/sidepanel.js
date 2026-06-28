@@ -535,38 +535,32 @@
     const M = PH.models;
     const panel = $('#mp-panel');
     let html = '';
-    ['us', 'cn'].forEach((region) => {
-      const companies = M.companiesInRegion(region);
-      if (!companies.length) return;
-      html += '<div class="mp-region"><div class="mp-region-label">' + M.REGION_LABEL[region] + '</div>';
-      companies.forEach((co) => {
-        const allIds = co.models.map((m) => M.makeId(co.company, m));
-        const checkedCount = allIds.filter((id) => state.editorModels[id]).length;
-        const allChecked = checkedCount === allIds.length;
-        const partial = checkedCount > 0 && !allChecked;
-        html += '<div class="mp-company">';
-        // 一级：供应商（带全选 + 折叠展开）
-        html += '<div class="mp-company-head">';
-        html += '<input type="checkbox" class="mp-company-all" data-company="' + escapeHtml(co.company) + '"' +
-          (allChecked ? ' checked' : '') + (partial ? ' data-partial="1"' : '') + ' />';
-        html += '<span class="mp-company-toggle" data-company="' + escapeHtml(co.company) + '">' +
-          icon('expand') + escapeHtml(co.company) +
-          (partial ? ' <em class="mp-partial">' + checkedCount + '/' + allIds.length + '</em>' :
-           (checkedCount > 0 ? ' <em class="mp-partial">✓</em>' : '')) + '</span>';
-        html += '</div>';
-        // 二级：模型列表（默认折叠，有选中时展开）
-        const expanded = checkedCount > 0;
-        html += '<div class="mp-models' + (expanded ? ' open' : '') + '">';
-        co.models.forEach((m) => {
-          const id = M.makeId(co.company, m);
-          const on = !!state.editorModels[id];
-          html += '<label class="mp-model' + (on ? ' on' : '') + '">';
-          html += '<input type="checkbox" class="mp-model-cb" data-id="' + escapeHtml(id) + '"' + (on ? ' checked' : '') + ' />';
-          html += '<span>' + escapeHtml(m) + '</span></label>';
-        });
-        html += '</div></div>';
-      });
+    M.CATALOG.forEach((co) => {
+      const allIds = co.models.map((m) => M.makeId(co.company, m));
+      const checkedCount = allIds.filter((id) => state.editorModels[id]).length;
+      const allChecked = checkedCount === allIds.length;
+      const partial = checkedCount > 0 && !allChecked;
+      html += '<div class="mp-company">';
+      // 一级：供应商（带全选 + 折叠展开）
+      html += '<div class="mp-company-head">';
+      html += '<input type="checkbox" class="mp-company-all" data-company="' + escapeHtml(co.company) + '"' +
+        (allChecked ? ' checked' : '') + (partial ? ' data-partial="1"' : '') + ' />';
+      html += '<span class="mp-company-toggle" data-company="' + escapeHtml(co.company) + '">' +
+        icon('expand') + escapeHtml(co.company) +
+        (partial ? ' <em class="mp-partial">' + checkedCount + '/' + allIds.length + '</em>' :
+         (checkedCount > 0 ? ' <em class="mp-partial">✓</em>' : '')) + '</span>';
       html += '</div>';
+      // 二级：模型列表（默认折叠，有选中时展开）
+      const expanded = checkedCount > 0;
+      html += '<div class="mp-models' + (expanded ? ' open' : '') + '">';
+      co.models.forEach((m) => {
+        const id = M.makeId(co.company, m);
+        const on = !!state.editorModels[id];
+        html += '<label class="mp-model' + (on ? ' on' : '') + '">';
+        html += '<input type="checkbox" class="mp-model-cb" data-id="' + escapeHtml(id) + '"' + (on ? ' checked' : '') + ' />';
+        html += '<span>' + escapeHtml(m) + '</span></label>';
+      });
+      html += '</div></div>';
     });
     panel.innerHTML = html;
     updateModelTrigger();
