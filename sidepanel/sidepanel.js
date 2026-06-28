@@ -379,14 +379,7 @@
         template.extractVariables(p.content).map((v) => '<span class="var-pill">' + escapeHtml(v.name) + (v.defaultValue ? '=' + escapeHtml(v.defaultValue) : '') + '</span>').join('') +
         '</div>' : '') +
       '<div class="pv-section-label">提示词内容</div>' +
-      '<div class="pv-content">' + escapeHtml(p.content || '') + '</div>' +
-      '<div class="pv-actions">' +
-        '<button class="btn ghost pv-copy">' + icon('copy') + ' 复制</button>' +
-        '<button class="btn primary pv-insert">' + icon('insert') + ' 插入</button>' +
-      '</div>';
-    const realP = state.editingId ? state.prompts.find((x) => x.id === state.editingId) : p;
-    box.querySelector('.pv-copy').addEventListener('click', () => usePrompt(realP || p, 'copy'));
-    box.querySelector('.pv-insert').addEventListener('click', () => usePrompt(realP || p, 'insert'));
+      '<div class="pv-content">' + escapeHtml(p.content || '') + '</div>';
   }
 
   function fillCategorySelect() {

@@ -136,7 +136,6 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
   padding: 14px; font-family: var(--mono); font-size: 13px; line-height: 1.6;
   white-space: pre-wrap; word-break: break-word; color: var(--text);
 }
-.detail-preview .pv-actions { display: flex; gap: 8px; margin-top: 14px; }
 
 .icon-btn {
   background: transparent;
