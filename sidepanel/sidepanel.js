@@ -867,7 +867,15 @@
     $('#set-tag-count').value = tc;
     $('#set-cat-range').value = Math.min(cc, SETTING_RANGE_MAX);
     $('#set-tag-range').value = Math.min(tc, SETTING_RANGE_MAX);
+    syncThemeSeg();
     $('#settings-sheet').hidden = false;
+  }
+  // 同步主题分段按钮的高亮态
+  function syncThemeSeg() {
+    const cur = state.settings.theme || 'auto';
+    document.querySelectorAll('#set-theme .seg').forEach((s) => {
+      s.classList.toggle('active', s.dataset.theme === cur);
+    });
   }
   function closeSettingsSheet() { $('#settings-sheet').hidden = true; }
   function bindSettingPair(rangeId, numId) {
@@ -1060,8 +1068,6 @@
   });
 
   // 显示设置面板
-  $('#catm-settings').addEventListener('click', openSettingsSheet);
-  $('#tagm-settings').addEventListener('click', openSettingsSheet);
   $('#settings-back').addEventListener('click', closeSettingsSheet);
   $('#settings-save').addEventListener('click', saveDisplaySettings);
   bindSettingPair('#set-cat-range', '#set-cat-count');
@@ -1082,13 +1088,17 @@
   $('#modal-insert').addEventListener('click', () => confirmModal('insert'));
   $('#modal-body').addEventListener('input', updatePreview);
 
-  // 主题
-  $('#btn-theme').addEventListener('click', async () => {
-    const cur = state.settings.theme || 'auto';
-    const next = cur === 'dark' ? 'light' : (cur === 'light' ? 'auto' : 'dark');
-    state.settings = await store.saveSettings({ theme: next });
+  // 顶栏设置按钮（打开显示设置面板）
+  $('#btn-settings').addEventListener('click', openSettingsSheet);
+
+  // 设置面板：主题切换（分段按钮）
+  $('#set-theme').addEventListener('click', async (e) => {
+    const seg = e.target.closest('.seg');
+    if (!seg) return;
+    const theme = seg.dataset.theme;
+    state.settings = await store.saveSettings({ theme: theme });
     applyTheme();
-    toast('主题：' + (next === 'auto' ? '跟随系统' : (next === 'dark' ? '暗色' : '亮色')));
+    syncThemeSeg();
   });
 
   // 全局键盘

@@ -22,8 +22,8 @@
           <button class="tab active" data-view="use" title="使用：搜索与使用提示词">使用</button>
           <button class="tab" data-view="manage" title="管理：增删改查">管理</button>
         </div>
-        <button id="btn-theme" class="icon-btn" title="切换主题" aria-label="主题">
-          <svg class="ic"><use href="#ic-moon"/></svg>
+        <button id="btn-settings" class="icon-btn" title="显示设置" aria-label="设置">
+          <svg class="ic"><use href="#ic-gear"/></svg>
         </button>
       </div>
     </header>
@@ -168,10 +168,7 @@
       <div class="sheet-head">
         <button class="icon-btn" id="catm-back" title="返回" aria-label="返回"><svg class="ic"><use href="#ic-back"/></svg></button>
         <span class="sheet-title">管理分类</span>
-        <div class="head-btns">
-          <button class="icon-btn" id="catm-settings" title="显示设置"><svg class="ic"><use href="#ic-gear"/></svg></button>
-          <button class="icon-btn primary-icon" id="catm-add" title="新建分类"><svg class="ic"><use href="#ic-plus"/></svg></button>
-        </div>
+        <button class="icon-btn primary-icon" id="catm-add" title="新建分类"><svg class="ic"><use href="#ic-plus"/></svg></button>
       </div>
       <div class="sheet-body" id="catm-list"></div>
     </div>
@@ -181,10 +178,7 @@
       <div class="sheet-head">
         <button class="icon-btn" id="tagm-back" title="返回" aria-label="返回"><svg class="ic"><use href="#ic-back"/></svg></button>
         <span class="sheet-title" id="tagm-title">管理标签</span>
-        <div class="head-btns">
-          <button class="icon-btn" id="tagm-settings" title="显示设置"><svg class="ic"><use href="#ic-gear"/></svg></button>
-          <button class="icon-btn primary-icon" id="tagm-add" title="新建标签"><svg class="ic"><use href="#ic-plus"/></svg></button>
-        </div>
+        <button class="icon-btn primary-icon" id="tagm-add" title="新建标签"><svg class="ic"><use href="#ic-plus"/></svg></button>
       </div>
       <div class="sheet-body" id="tagm-list"></div>
     </div>
@@ -196,6 +190,14 @@
         <span class="sheet-title">显示设置</span>
       </div>
       <div class="sheet-body">
+        <div class="setting-item">
+          <div class="setting-label"><span>主题</span></div>
+          <div class="seg-group" id="set-theme">
+            <button type="button" class="seg" data-theme="auto">跟随系统</button>
+            <button type="button" class="seg" data-theme="light">亮色</button>
+            <button type="button" class="seg" data-theme="dark">暗色</button>
+          </div>
+        </div>
         <div class="setting-hint">设置「使用界面」筛选区默认展示多少条分类和标签。超出部分仍可通过搜索访问，0 表示全部展示。</div>
         <div class="setting-item">
           <div class="setting-label">

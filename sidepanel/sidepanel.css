@@ -526,6 +526,16 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 .setting-num:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
 .setting-range { width: 100%; accent-color: var(--primary); cursor: pointer; }
 .setting-desc { font-size: 12px; color: var(--text-faint); margin-top: 8px; }
+
+/* 主题分段选择器 */
+.seg-group { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
+.seg {
+  flex: 1; border: none; background: var(--bg-soft); color: var(--text-soft);
+  padding: 9px 0; font-size: 13px; cursor: pointer; transition: all 0.12s;
+}
+.seg + .seg { border-left: 1px solid var(--border); }
+.seg:hover { background: var(--bg-hover); color: var(--text); }
+.seg.active { background: var(--primary); color: #fff; font-weight: 600; }
 .btn.primary { background: var(--primary); color: #fff; }
 .btn.primary:hover { filter: brightness(1.08); }
 .btn.ghost { background: var(--bg-soft); color: var(--text); border: 1px solid var(--border); }
