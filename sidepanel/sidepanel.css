@@ -346,6 +346,7 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
   display: inline-flex; align-items: center; gap: 3px;
 }
 .manage-tiny-btn .ic { width: 13px; height: 13px; }
+.manage-tiny-btn.icon-only { padding: 4px; line-height: 0; }
 .manage-tiny-btn:hover { color: var(--primary); border-color: var(--primary); border-style: solid; }
 .no-tag-hint { font-size: 11.5px; color: var(--text-faint); padding: 4px 0; align-self: center; }
 .m-chip {

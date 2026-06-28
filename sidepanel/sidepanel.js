@@ -130,8 +130,8 @@
     }
     // 分类管理入口（放在筛选区末尾）
     const mgr = document.createElement('button');
-    mgr.className = 'manage-tiny-btn';
-    mgr.innerHTML = icon('gear') + ' 管理分类';
+    mgr.className = 'manage-tiny-btn icon-only';
+    mgr.innerHTML = icon('gear');
     mgr.title = '管理分类（增删改）';
     mgr.addEventListener('click', openCatmSheet);
     elFilters.appendChild(mgr);
@@ -171,7 +171,7 @@
       html += '<button class="chip expand-btn" title="' + escapeHtml(tt) + '">' + icon(expanded ? 'collapse' : 'expand') + '</button>';
     }
     // 标签管理入口
-    html += '<button class="manage-tiny-btn" id="btn-manage-tag-inline">' + icon('gear') + ' 管理标签</button>';
+    html += '<button class="manage-tiny-btn icon-only" id="btn-manage-tag-inline" title="管理标签（增删改）">' + icon('gear') + '</button>';
     row.innerHTML = html;
   }
 
