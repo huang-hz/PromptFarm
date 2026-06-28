@@ -104,7 +104,12 @@
     const limit = state.settings.displayCatCount || 0;
     const needCollapse = limit > 0 && state.categories.length > limit;
     const showAll = !needCollapse || state.catExpanded;
-    const cats = showAll ? state.categories : state.categories.slice(0, limit);
+    const cats = showAll ? state.categories.slice() : state.categories.slice(0, limit);
+    // 收起态下，若当前选中的分类不在前 limit 个，则追加保留展示（与场景标签一致）
+    if (!showAll && state.activeFilter) {
+      const sel = state.categories.find((c) => c.id === state.activeFilter);
+      if (sel && cats.indexOf(sel) < 0) cats.push(sel);
+    }
     cats.forEach((c) => {
       const btn = document.createElement('button');
       btn.className = 'chip cat-chip' + (state.activeFilter === c.id ? ' active' : '');
