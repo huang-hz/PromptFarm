@@ -21,7 +21,7 @@
         <button id="btn-batch" class="icon-btn" title="按分类/标签删除提示词" aria-label="批量删除">
           <svg class="ic"><use href="#ic-batch"/></svg>
         </button>
-        <button id="btn-settings" class="icon-btn" title="显示设置" aria-label="设置">
+        <button id="btn-settings" class="icon-btn" title="设置" aria-label="设置">
           <svg class="ic"><use href="#ic-gear"/></svg>
         </button>
       </div>
@@ -142,11 +142,11 @@
       <div class="sheet-body" id="tagm-list"></div>
     </div>
 
-    <!-- ========== 显示设置面板（全屏） ========== -->
+    <!-- ========== 设置面板（全屏） ========== -->
     <div class="sheet" id="settings-sheet" hidden>
       <div class="sheet-head">
         <button class="icon-btn" id="settings-back" title="返回" aria-label="返回"><svg class="ic"><use href="#ic-back"/></svg></button>
-        <span class="sheet-title">显示设置</span>
+        <span class="sheet-title">设置</span>
       </div>
       <div class="sheet-body">
         <div class="setting-item">
@@ -172,6 +172,13 @@
           </div>
           <input type="range" class="setting-range" id="set-tag-range" min="0" max="20" />
           <div class="setting-desc">场景标签行默认显示的条数，0 表示全部展示</div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-label">
+            <span>供应商-模型管理</span>
+            <button type="button" class="btn-mini primary" id="open-mm">管理</button>
+          </div>
+          <div class="setting-desc">维护供应商与模型清单，并选择在提示词中可见的激活模型</div>
         </div>
         <button type="button" class="btn primary block" id="settings-save">保存</button>
       </div>
@@ -224,6 +231,45 @@
 
     <!-- ========== 回收站悬浮预览气泡 ========== -->
     <div class="trash-preview" id="trash-preview" hidden></div>
+
+    <!-- ========== 供应商-模型管理面板（单框树：勾选=激活，支持增删改） ========== -->
+    <div class="sheet" id="mm-sheet" hidden>
+      <div class="sheet-head">
+        <button class="icon-btn" id="mm-back" title="返回" aria-label="返回"><svg class="ic"><use href="#ic-back"/></svg></button>
+        <span class="sheet-title">供应商-模型管理</span>
+        <button class="icon-btn primary-icon" id="mm-add" title="新建"><svg class="ic"><use href="#ic-plus"/></svg></button>
+      </div>
+      <div class="sheet-body">
+        <div class="mm-list" id="mm-cat-list"></div>
+      </div>
+    </div>
+
+    <!-- ========== 新建/重命名 弹层（模型/供应商通用） ========== -->
+    <div class="modal-overlay" id="mm-overlay" hidden>
+      <div class="modal small">
+        <div class="modal-head">
+          <span id="mm-overlay-title">新建模型</span>
+          <button class="icon-btn" id="mm-close" aria-label="关闭"><svg class="ic"><use href="#ic-close"/></svg></button>
+        </div>
+        <div class="modal-body">
+          <div class="field">
+            <label>供应商 <span class="req">*</span></label>
+            <div class="inline-select">
+              <select id="mm-company"></select>
+              <input type="text" id="mm-company-new" placeholder="或输入新供应商" style="flex:1" />
+            </div>
+          </div>
+          <div class="field">
+            <label>模型名 <span class="hint" id="mm-model-hint">留空则只新建供应商</span></label>
+            <input type="text" id="mm-model-name" placeholder="如 GPT-5.5" />
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn ghost" id="mm-cancel">取消</button>
+          <button class="btn primary" id="mm-confirm">添加</button>
+        </div>
+      </div>
+    </div>
 
     <div class="modal-overlay" id="cat-overlay" hidden>
       <div class="modal small">

@@ -37,7 +37,10 @@
     batchChecked: {},
     // 回收站
     trash: [],
-    trashHoverTimer: null
+    trashHoverTimer: null,
+    // 供应商-模型管理
+    catalog: [],
+    activeModels: []            // 激活的模型 id 数组
   };
 
   // ---------- DOM ----------
@@ -66,6 +69,7 @@
     state.categories = await store.getCategories();
     state.prompts = await store.getPrompts();
     state.trash = await store.getTrash();
+    await loadCatalogAndActive();   // 载入持久化目录与激活列表，覆盖 PH.models.CATALOG
     applyTheme();
     renderCategoryChips();
     renderSceneRow();
@@ -82,6 +86,11 @@
         state.trash = changes[store.KEYS.trash].newValue || [];
         updateTrashCount();
         if (!$('#trash-sheet').hidden) renderTrashList();
+      }
+      if (changes[store.KEYS.catalog] || changes[store.KEYS.activeModels]) {
+        loadCatalogAndActive().then(() => {
+          if (!$('#mm-sheet').hidden) renderMM();
+        });
       }
       if (changes[store.KEYS.settings]) {
         state.settings = Object.assign(state.settings, changes[store.KEYS.settings].newValue);
@@ -524,7 +533,13 @@
     let html = '';
     const companies = M.CATALOG.slice().sort((a, b) => a.company.localeCompare(b.company, 'en'));
     companies.forEach((co) => {
-      const allIds = co.models.map((m) => M.makeId(co.company, m));
+      // 仅渲染「激活」或「已选」的模型（未激活且未选的不出现在下拉框）
+      const activeOrSelected = co.models.filter((m) => {
+        const id = M.makeId(co.company, m);
+        return isActiveModel(id) || state.editorModels[id];
+      });
+      if (!activeOrSelected.length) return;   // 该供应商无可显示模型 → 跳过
+      const allIds = activeOrSelected.map((m) => M.makeId(co.company, m));
       const checkedCount = allIds.filter((id) => state.editorModels[id]).length;
       const allChecked = checkedCount === allIds.length;
       const partial = checkedCount > 0 && !allChecked;
@@ -539,7 +554,7 @@
       html += '</div>';
       const expanded = checkedCount > 0;
       html += '<div class="mp-models' + (expanded ? ' open' : '') + '">';
-      co.models.forEach((m) => {
+      activeOrSelected.forEach((m) => {
         const id = M.makeId(co.company, m);
         const on = !!state.editorModels[id];
         html += '<label class="mp-model' + (on ? ' on' : '') + '">';
@@ -1153,6 +1168,197 @@
     el.hidden = n === 0;
   }
 
+  // ---------- 供应商-模型管理 ----------
+  // 载入持久化目录与激活列表；首次为空则用内置全集初始化，并默认全激活
+  async function loadCatalogAndActive() {
+    let cat = await store.getCatalog();
+    let act = await store.getActiveModels();
+    if (!cat || !cat.length) {
+      cat = PH.models.DEFAULT_CATALOG.map((c) => Object.assign({}, c, { models: c.models.slice() }));
+      await store.saveCatalog(cat);
+    }
+    const allIds = [];
+    cat.forEach((c) => c.models.forEach((m) => allIds.push(PH.models.makeId(c.company, m))));
+    if (!act || !act.length) {
+      act = allIds.slice();
+      await store.setActiveModels(act);
+    }
+    state.catalog = cat;
+    state.activeModels = act;
+    PH.models.setCatalog(cat);     // 覆盖运行时 CATALOG，使现有消费者读到编辑后的目录
+  }
+  function isActiveModel(id) { return state.activeModels.indexOf(id) >= 0; }
+
+  function openMMSheet() {
+    renderMM();
+    $('#mm-sheet').hidden = false;
+  }
+  function closeMMSheet() {
+    $('#mm-sheet').hidden = true;
+  }
+  function renderMM() {
+    const box = $('#mm-cat-list');
+    const M = PH.models;
+    const cat = state.catalog;
+    if (!cat.length) { box.innerHTML = '<div class="mgr-empty">目录为空，点右上「+」添加供应商/模型</div>'; return; }
+    box.innerHTML = cat.map((c) => {
+      const allIds = c.models.map((m) => M.makeId(c.company, m));
+      const checkedCount = allIds.filter((id) => isActiveModel(id)).length;
+      const allChecked = checkedCount === allIds.length;
+      const partial = checkedCount > 0 && !allChecked;
+      const modelsHtml = c.models.map((m) => {
+        const id = M.makeId(c.company, m);
+        const on = isActiveModel(id);
+        return '<label class="mm-model' + (on ? ' active' : '') + '">' +
+          '<input type="checkbox" class="mm-cb" data-id="' + escapeHtml(id) + '"' + (on ? ' checked' : '') + '>' +
+          '<span class="mm-name">' + escapeHtml(m) + '</span>' +
+          '<span class="mm-actions">' +
+            '<button class="icon-mini mm-rename-model" data-id="' + escapeHtml(id) + '" title="重命名模型">' + icon('edit') + '</button>' +
+            '<button class="icon-mini mm-del-model" data-id="' + escapeHtml(id) + '" title="删除模型">' + icon('trash') + '</button>' +
+          '</span>' +
+        '</label>';
+      }).join('');
+      return '<div class="mm-company">' +
+        '<div class="mm-company-head">' +
+          '<input type="checkbox" class="mm-company-all" data-company="' + escapeHtml(c.company) + '"' + (allChecked ? ' checked' : '') + (partial ? ' data-partial="1"' : '') + '>' +
+          '<span class="mm-company-toggle">' + icon('expand') + escapeHtml(c.company) + (partial ? ' <em class="mp-partial">' + checkedCount + '/' + allIds.length + '</em>' : '') + '<em class="mm-count">' + c.models.length + '</em></span>' +
+          '<button class="icon-mini mm-rename-company" data-company="' + escapeHtml(c.company) + '" title="重命名供应商">' + icon('edit') + '</button>' +
+          '<button class="icon-mini mm-del-company" data-company="' + escapeHtml(c.company) + '" title="删除整个供应商">' + icon('trash') + '</button>' +
+        '</div>' +
+        '<div class="mm-models open">' + modelsHtml + '</div>' +
+      '</div>';
+    }).join('');
+    bindMMEvents();
+  }
+  function bindMMEvents() {
+    const box = $('#mm-cat-list');
+    // 折叠/展开公司
+    box.querySelectorAll('.mm-company-toggle').forEach((t) => {
+      t.addEventListener('click', () => { const m = t.parentElement.nextElementSibling; if (m) m.classList.toggle('open'); });
+    });
+    // 公司全选：勾选该公司全部模型
+    box.querySelectorAll('.mm-company-all').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const co = cb.dataset.company;
+        const entry = state.catalog.find((c) => c.company === co);
+        if (entry) entry.models.forEach((m) => {
+          const id = PH.models.makeId(co, m);
+          const i = state.activeModels.indexOf(id);
+          if (cb.checked) { if (i < 0) state.activeModels.push(id); }
+          else if (i >= 0) state.activeModels.splice(i, 1);
+        });
+        store.setActiveModels(state.activeModels).then(renderMM);
+      });
+    });
+    // 单个模型勾选
+    box.querySelectorAll('.mm-cb').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const id = cb.dataset.id;
+        const i = state.activeModels.indexOf(id);
+        if (cb.checked) { if (i < 0) state.activeModels.push(id); }
+        else if (i >= 0) state.activeModels.splice(i, 1);
+        store.setActiveModels(state.activeModels).then(renderMM);
+      });
+    });
+    box.querySelectorAll('.mm-rename-model').forEach((b) => b.addEventListener('click', () => renameModel(b.dataset.id)));
+    box.querySelectorAll('.mm-del-model').forEach((b) => b.addEventListener('click', () => deleteModelFromCatalog(b.dataset.id)));
+    box.querySelectorAll('.mm-rename-company').forEach((b) => b.addEventListener('click', () => renameCompany(b.dataset.company)));
+    box.querySelectorAll('.mm-del-company').forEach((b) => b.addEventListener('click', () => deleteCompany(b.dataset.company)));
+  }
+  // 写回目录与激活列表，并覆盖运行时 CATALOG
+  async function persistCatalog() {
+    await store.saveCatalog(state.catalog);
+    await store.setActiveModels(state.activeModels);
+    PH.models.setCatalog(state.catalog);
+    renderMM();
+  }
+  // 删除单个模型（同时取消激活）
+  async function deleteModelFromCatalog(id) {
+    if (!await showConfirm('删除该模型？\n（已使用该模型的提示词不受影响，仅目录与下拉框不再列出）')) return;
+    const { company, model } = PH.models.parseId(id);
+    state.catalog.forEach((c) => { if (c.company === company) c.models = c.models.filter((m) => m !== model); });
+    state.catalog = state.catalog.filter((c) => c.models.length > 0);   // 清空模型的公司一并移除
+    state.activeModels = state.activeModels.filter((x) => x !== id);
+    await persistCatalog();
+  }
+  // 删除整个供应商
+  async function deleteCompany(company) {
+    if (!await showConfirm('删除供应商「' + company + '」及其全部模型？')) return;
+    state.catalog = state.catalog.filter((c) => c.company !== company);
+    state.activeModels = state.activeModels.filter((id) => PH.models.parseId(id).company !== company);
+    await persistCatalog();
+  }
+  // 重命名模型（同步更新已选激活列表中的旧 id）
+  async function renameModel(id) {
+    const { company, model } = PH.models.parseId(id);
+    const next = await showPrompt('将模型「' + model + '」重命名为：', model);
+    if (next == null) return;
+    const newName = String(next).trim();
+    if (!newName) { toast('名称不能为空'); return; }
+    if (newName === model) return;
+    const entry = state.catalog.find((c) => c.company === company);
+    if (!entry) return;
+    if (entry.models.indexOf(newName) >= 0) { toast('该供应商下已存在同名模型'); return; }
+    entry.models = entry.models.map((m) => m === model ? newName : m);
+    const newId = PH.models.makeId(company, newName);
+    const i = state.activeModels.indexOf(id);
+    if (i >= 0) { state.activeModels.splice(i, 1); if (state.activeModels.indexOf(newId) < 0) state.activeModels.push(newId); }
+    await persistCatalog();
+    toast('已重命名');
+  }
+  // 重命名供应商（同步更新激活列表中的旧 id 前缀）
+  async function renameCompany(company) {
+    const next = await showPrompt('将供应商「' + company + '」重命名为：', company);
+    if (next == null) return;
+    const newName = String(next).trim();
+    if (!newName) { toast('名称不能为空'); return; }
+    if (newName === company) return;
+    if (state.catalog.some((c) => c.company === newName)) { toast('已存在同名供应商'); return; }
+    const entry = state.catalog.find((c) => c.company === company);
+    if (!entry) return;
+    entry.company = newName;
+    // 重写激活列表里该公司所有 id 的前缀
+    state.activeModels = state.activeModels.map((id) => {
+      const p = PH.models.parseId(id);
+      return p.company === company ? PH.models.makeId(newName, p.model) : id;
+    });
+    await persistCatalog();
+    toast('已重命名');
+  }
+  // 新建弹层：可新建供应商（模型名留空）或供应商+模型
+  function openMMOverlay() {
+    const sel = $('#mm-company');
+    sel.innerHTML = '<option value="">（选择已有供应商）</option>' +
+      state.catalog.map((c) => '<option value="' + escapeHtml(c.company) + '">' + escapeHtml(c.company) + '</option>').join('');
+    $('#mm-company-new').value = '';
+    $('#mm-model-name').value = '';
+    $('#mm-overlay-title').textContent = '新建';
+    $('#mm-confirm').textContent = '添加';
+    $('#mm-overlay').hidden = false;
+    setTimeout(() => { if (state.catalog.length) $('#mm-model-name').focus(); else $('#mm-company-new').focus(); }, 30);
+  }
+  function closeMMOverlay() { $('#mm-overlay').hidden = true; }
+  async function confirmAddModel() {
+    const name = $('#mm-model-name').value.trim();
+    const company = ($('#mm-company-new').value.trim() || $('#mm-company').value).trim();
+    if (!company) { toast('请选择或输入供应商'); return; }
+    let entry = state.catalog.find((c) => c.company === company);
+    if (!entry) { entry = { company: company, models: [] }; state.catalog.push(entry); }
+    if (!name) {   // 只新建供应商
+      await persistCatalog();
+      closeMMOverlay();
+      toast('已新建供应商「' + company + '」');
+      return;
+    }
+    const id = PH.models.makeId(company, name);
+    if (entry.models.indexOf(name) >= 0) { toast('该模型已存在'); return; }
+    entry.models.push(name);
+    if (state.activeModels.indexOf(id) < 0) state.activeModels.push(id);   // 新增默认激活
+    await persistCatalog();
+    closeMMOverlay();
+    toast('已添加 ' + company + '/' + name);
+  }
+
 
   // ---------- 导入导出 ----------
   async function doExport() {
@@ -1324,6 +1530,16 @@
   bindSettingPair('#set-cat-range', '#set-cat-count');
   bindSettingPair('#set-tag-range', '#set-tag-count');
 
+  // 供应商-模型管理
+  $('#open-mm').addEventListener('click', openMMSheet);
+  $('#mm-back').addEventListener('click', closeMMSheet);
+  $('#mm-add').addEventListener('click', openMMOverlay);
+  $('#mm-close').addEventListener('click', closeMMOverlay);
+  $('#mm-cancel').addEventListener('click', closeMMOverlay);
+  $('#mm-confirm').addEventListener('click', confirmAddModel);
+  $('#mm-overlay').addEventListener('click', (e) => { if (e.target === $('#mm-overlay')) closeMMOverlay(); });
+  $('#mm-model-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); confirmAddModel(); } });
+
   // 批量删除面板
   $('#btn-batch').addEventListener('click', openBatchSheet);
   $('#batch-back').addEventListener('click', closeBatchSheet);
@@ -1415,12 +1631,14 @@
       if (!$('#settings-sheet').hidden) { closeSettingsSheet(); return; }
       if (!$('#batch-sheet').hidden) { closeBatchSheet(); return; }
       if (!$('#trash-sheet').hidden) { closeTrashSheet(); return; }
+      if (!$('#mm-sheet').hidden) { closeMMSheet(); return; }
+      if (!$('#mm-overlay').hidden) { closeMMOverlay(); return; }
       if (!$('#modal-overlay').hidden) { closeVariableModal(); return; }
       if (!$('#cat-overlay').hidden) { $('#cat-overlay').hidden = true; return; }
       if (!$('#import-overlay').hidden) { $('#import-overlay').hidden = true; return; }
     }
     // 列表键盘导航
-    if ($('#detail-sheet').hidden && $('#catm-sheet').hidden && $('#tagm-sheet').hidden && $('#settings-sheet').hidden && $('#batch-sheet').hidden && $('#trash-sheet').hidden) {
+    if ($('#detail-sheet').hidden && $('#catm-sheet').hidden && $('#tagm-sheet').hidden && $('#settings-sheet').hidden && $('#batch-sheet').hidden && $('#trash-sheet').hidden && $('#mm-sheet').hidden) {
       const a = document.activeElement;
       if (a === elSearch || a === elResults || a === document.body) {
         if (e.key === 'ArrowDown') { e.preventDefault(); selectIndex(state.selectedIndex + 1); }
