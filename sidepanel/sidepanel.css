@@ -690,3 +690,132 @@ mark { background: var(--accent); color: #1a1a1a; border-radius: 2px; padding: 0
 .icon-mini:hover { background: var(--bg-hover); color: var(--text); }
 .icon-mini.mm-del-model:hover, .icon-mini.mm-del-company:hover { color: var(--danger); background: rgba(239,68,68,0.1); }
 
+/* ---------- 提示词AI优化：编辑框右下角优化按钮 ---------- */
+.content-edit-wrap { position: relative; }
+.content-edit-wrap .opt-btn {
+  position: absolute; right: 6px; bottom: 6px; z-index: 2;
+  background: var(--bg-soft); border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.content-edit-wrap .opt-btn:hover { color: var(--primary); border-color: var(--primary); }
+.content-edit-wrap .opt-btn .ic { width: 16px; height: 16px; }
+.content-edit-wrap .opt-btn.loading { color: var(--primary); pointer-events: none; }
+.content-edit-wrap .opt-btn.loading .ic { animation: opt-spin 0.8s linear infinite; }
+@keyframes opt-spin { to { transform: rotate(360deg); } }
+
+/* ---------- 提示词优化弹层（多阶段） ---------- */
+#opt-overlay .opt-modal { max-width: 460px; }
+#opt-overlay #opt-result {
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.6; resize: vertical;
+  min-height: 180px; white-space: pre-wrap;
+}
+#opt-overlay .opt-status-field { margin-bottom: 8px; }
+.opt-status { font-size: 12.5px; padding: 8px 10px; border-radius: 8px; }
+.opt-status.info { color: var(--primary); background: var(--primary-soft); }
+.opt-status.error { color: var(--danger); background: rgba(239,68,68,0.1); }
+#opt-overlay.loading #opt-apply { opacity: 0.5; pointer-events: none; }
+/* 阶段显隐由 JS 控制 opt-phase 的 hidden，无需额外规则 */
+
+/* 单滑块 20 档（左创意虚构 ↔ 右详细咨询）*/
+.opt-slider-row { margin-bottom: 4px; }
+.opt-slider-ends { display: flex; justify-content: space-between; margin-bottom: 6px; }
+.opt-slider-ends span { font-size: 11.5px; color: var(--text-soft); }
+.opt-end-left { font-size: 11.5px; color: var(--text-soft); }
+.opt-end-right { font-size: 11.5px; color: var(--text-soft); }
+.opt-slider { width: 100%; accent-color: var(--primary); cursor: pointer; }
+.opt-slider-label { font-size: 11.5px; color: var(--text-faint); margin-top: 6px; text-align: center; }
+.opt-slider-label.hot { color: var(--primary); font-weight: 600; }
+/* 设置页「优化指令」字段内的档位滑块 */
+.ai-sys-slider-wrap { margin: 6px 0 10px; }
+.ai-sys-slider-wrap #ai-sys-slider {
+  display: block;
+  width: 100%;
+  height: 22px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+.ai-sys-slider-wrap #ai-sys-slider:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 自定义 range：让 thumb 能滑到轨道两端尽头（解决默认 thumb 卡在 track 边缘内的问题）。
+   统一应用于两个 20 档滑块：#opt-slider（优化弹层）与 #ai-sys-slider（设置页）。 */
+#opt-slider, #ai-sys-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  background: transparent;
+}
+/* WebKit / Edge / Chrome */
+#opt-slider::-webkit-slider-runnable-track,
+#ai-sys-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+#opt-slider::-webkit-slider-thumb,
+#ai-sys-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid var(--bg);
+  margin-top: -6px;        /* (track高4 - thumb高16)/2 = -6，垂直居中 */
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  cursor: pointer;
+}
+/* Firefox */
+#opt-slider::-moz-range-track,
+#ai-sys-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+#opt-slider::-moz-range-thumb,
+#ai-sys-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--primary);
+  border: 2px solid var(--bg);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  cursor: pointer;
+}
+#ai-sys-slider:disabled::-webkit-slider-thumb { background: var(--text-faint); }
+#ai-sys-slider:disabled::-moz-range-thumb { background: var(--text-faint); }
+
+/* 咨询问答 */
+.opt-qa-intro { font-size: 12px; color: var(--text-soft); margin-bottom: 10px; }
+.opt-q { border: 1px solid var(--border); border-radius: 9px; padding: 10px; margin-bottom: 10px; background: var(--bg-soft); }
+.opt-q:last-child { margin-bottom: 0; }
+.opt-q-title { font-size: 12.5px; font-weight: 600; margin-bottom: 8px; }
+.opt-q-multi-tag { font-size: 10.5px; color: var(--primary); background: var(--primary-soft); padding: 1px 6px; border-radius: 5px; margin-left: 6px; font-weight: 400; }
+.opt-q-opt { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-radius: 7px; cursor: pointer; margin-bottom: 2px; }
+.opt-q-opt:hover { background: var(--bg-hover); }
+.opt-q-opt input { margin-top: 2px; accent-color: var(--primary); flex-shrink: 0; }
+.opt-q-opt-text { font-size: 12.5px; line-height: 1.4; }
+.opt-q-opt-desc { font-size: 11px; color: var(--text-faint); margin-top: 1px; }
+
+/* ---------- 优化指令字段（默认只读 + 编辑/默认按钮） ---------- */
+.opt-cmd-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.opt-cmd-head > label { margin: 0; }
+.opt-cmd-actions { display: flex; gap: 6px; }
+/* 只读态：灰背景、不可选光标 */
+#ai-system[readonly] {
+  background: var(--bg-soft);
+  color: var(--text-soft);
+  cursor: default;
+}
+/* 编辑态：白底 + 主色聚焦环 */
+#ai-system:not([readonly]) {
+  background: var(--bg);
+  color: var(--text);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+/* 「保存」态按钮主色高亮 */
+#ai-sys-edit.saving {
+  background: var(--primary); color: #fff; border-color: var(--primary);
+}
+#ai-sys-edit.saving:hover { background: var(--primary); }
+

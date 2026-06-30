@@ -112,7 +112,10 @@
             提示词内容 <span class="req">*</span>
             <span class="hint">变量：<code>{{变量名}}</code> <code>{{变量名=默认值}}</code> <code>{{变量名|提示}}</code></span>
           </label>
-          <textarea name="content" rows="10" required placeholder="在这里写提示词内容。可使用 {{变量}} 让使用时填值。"></textarea>
+          <div class="content-edit-wrap">
+            <textarea name="content" rows="10" required placeholder="在这里写提示词内容。可使用 {{变量}} 让使用时填值。"></textarea>
+            <button type="button" class="icon-mini opt-btn" id="opt-prompt" title="提示词AI优化" aria-label="提示词AI优化"><svg class="ic"><use href="#ic-spark"/></svg></button>
+          </div>
         </div>
         <div class="field">
           <label>检测到的变量</label>
@@ -180,6 +183,13 @@
           </div>
           <div class="setting-desc">维护供应商与模型清单，并选择在提示词中可见的激活模型</div>
         </div>
+        <div class="setting-item">
+          <div class="setting-label">
+            <span>提示词AI优化</span>
+            <button type="button" class="btn-mini primary" id="open-ai">配置</button>
+          </div>
+          <div class="setting-desc">配置 AI 供应商、密钥与模型，用于编辑提示词时的智能优化</div>
+        </div>
         <button type="button" class="btn primary block" id="settings-save">保存</button>
       </div>
     </div>
@@ -244,6 +254,61 @@
       </div>
     </div>
 
+    <!-- ========== 提示词AI优化配置面板（全屏） ========== -->
+    <div class="sheet" id="ai-sheet" hidden>
+      <div class="sheet-head">
+        <button class="icon-btn" id="ai-back" title="返回" aria-label="返回"><svg class="ic"><use href="#ic-back"/></svg></button>
+        <span class="sheet-title">提示词AI优化</span>
+      </div>
+      <div class="sheet-body">
+        <div class="field">
+          <label>接口协议</label>
+          <select id="ai-proto">
+            <option value="openai">OpenAI 兼容</option>
+            <option value="anthropic">Anthropic 兼容</option>
+          </select>
+          <div class="hint" style="margin-top:4px">官方 OpenAI / Anthropic、以及各大聚合中转 API 通常兼容其中之一</div>
+        </div>
+        <div class="field">
+          <label>Base URL</label>
+          <input type="text" id="ai-base" placeholder="如 https://api.openai.com（无需 /v1 后缀）" />
+          <div class="hint" style="margin-top:4px">留空则使用协议默认地址</div>
+        </div>
+        <div class="field">
+          <label>API Key</label>
+          <input type="password" id="ai-key" placeholder="sk-..." autocomplete="off" />
+        </div>
+        <div class="field">
+          <label>模型</label>
+          <div class="inline-select">
+            <input type="text" id="ai-model" placeholder="如 gpt-5.4-mini" style="flex:1" />
+            <button type="button" class="btn-mini" id="ai-fetch-models">获取列表</button>
+          </div>
+          <div class="hint" style="margin-top:4px">可手动输入，或填好上面的 Base/Key 后点「获取列表」拉取</div>
+        </div>
+        <div class="field">
+          <div class="opt-cmd-head">
+            <label>优化指令</label>
+            <div class="opt-cmd-actions">
+              <button type="button" class="btn-mini" id="ai-sys-edit">编辑</button>
+              <button type="button" class="btn-mini" id="ai-sys-default" title="将该档重置为内置默认">重置</button>
+            </div>
+          </div>
+          <div class="ai-sys-slider-wrap">
+            <div class="opt-slider-ends">
+              <span>← 创意·虚构</span>
+              <span>详细·咨询 →</span>
+            </div>
+            <input type="range" class="setting-range" id="ai-sys-slider" min="1" max="20" value="10" />
+            <div class="hint" id="ai-sys-slider-label" style="margin-top:4px;text-align:center"></div>
+          </div>
+          <textarea id="ai-system" rows="8" readonly></textarea>
+          <div class="hint" id="ai-sys-hint" style="margin-top:4px"></div>
+        </div>
+        <button type="button" class="btn primary block" id="ai-save">保存配置</button>
+      </div>
+    </div>
+
     <!-- ========== 新建/重命名 弹层（模型/供应商通用） ========== -->
     <div class="modal-overlay" id="mm-overlay" hidden>
       <div class="modal small">
@@ -271,6 +336,52 @@
       </div>
     </div>
 
+    <!-- ========== 提示词优化弹层（多阶段：选档/问答/结果） ========== -->
+    <div class="modal-overlay" id="opt-overlay" hidden>
+      <div class="modal small opt-modal">
+        <div class="modal-head">
+          <span id="opt-title">提示词优化</span>
+          <button class="icon-btn" id="opt-close" aria-label="关闭"><svg class="ic"><use href="#ic-close"/></svg></button>
+        </div>
+        <div class="modal-body">
+          <div class="field opt-status-field" id="opt-status-field" hidden>
+            <div class="opt-status" id="opt-status"></div>
+          </div>
+
+          <!-- 阶段1：选档（单滑块 20 档：左创意虚构 ↔ 右详细咨询）-->
+          <div class="opt-phase opt-setup" id="opt-setup">
+            <div class="opt-slider-row">
+              <div class="opt-slider-ends">
+                <span class="opt-end-left">← 创意·虚构</span>
+                <span class="opt-end-right">详细·咨询 →</span>
+              </div>
+              <input type="range" class="setting-range opt-slider" id="opt-slider" min="1" max="20" value="10" />
+              <div class="opt-slider-label" id="opt-slider-label">创意度 1/10 · 极轻微虚构</div>
+            </div>
+          </div>
+
+          <!-- 阶段2：咨询问答 -->
+          <div class="opt-phase opt-qa" id="opt-qa" hidden>
+            <div class="opt-qa-intro">为获得更精准的结果，请回答以下问题（可跳过）：</div>
+            <div id="opt-qa-list"></div>
+          </div>
+
+          <!-- 阶段3：结果 -->
+          <div class="opt-phase opt-result" id="opt-result-phase" hidden>
+            <div class="field">
+              <label>优化结果 <span class="hint">可再次编辑后应用</span></label>
+              <textarea id="opt-result" rows="10"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn ghost" id="opt-cancel">取消</button>
+          <button class="btn primary" id="opt-apply">开始优化</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 新建/编辑分类 弹层 ========== -->
     <div class="modal-overlay" id="cat-overlay" hidden>
       <div class="modal small">
         <div class="modal-head">
@@ -367,6 +478,7 @@
   <script src="../lib/template.js"></script>
   <script src="../lib/models.js"></script>
   <script src="../lib/store.js"></script>
+  <script src="../lib/llm.js"></script>
   <script src="../seed/seed-data.js"></script>
   <script src="sidepanel.js"></script>
 </body>

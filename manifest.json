@@ -26,6 +26,9 @@
     "scripting",
     "contextMenus"
   ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "web_accessible_resources": [
     {
       "resources": ["sidepanel/icons.html"],

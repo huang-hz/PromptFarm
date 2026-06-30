@@ -40,7 +40,13 @@
     trashHoverTimer: null,
     // 供应商-模型管理
     catalog: [],
-    activeModels: []            // 激活的模型 id 数组
+    activeModels: [],           // 激活的模型 id 数组
+    // 提示词AI优化配置
+    aiConfig: {},               // { proto, baseUrl, apiKey, model, levelPrompts }
+    sysEditPos: 10,             // 设置页「优化指令」当前查看/编辑的档位(1-20)
+    // 提示词优化会话（多阶段）
+    optPhase: 'setup',          // setup | qa | result
+    optCtx: null                // { content, creativity, detail, questions, answers }
   };
 
   // ---------- DOM ----------
@@ -70,6 +76,7 @@
     state.prompts = await store.getPrompts();
     state.trash = await store.getTrash();
     await loadCatalogAndActive();   // 载入持久化目录与激活列表，覆盖 PH.models.CATALOG
+    state.aiConfig = await store.getAiConfig();
     applyTheme();
     renderCategoryChips();
     renderSceneRow();
@@ -91,6 +98,10 @@
         loadCatalogAndActive().then(() => {
           if (!$('#mm-sheet').hidden) renderMM();
         });
+      }
+      if (changes[store.KEYS.aiConfig]) {
+        state.aiConfig = Object.assign({}, store.DEFAULT_AI_CONFIG, changes[store.KEYS.aiConfig].newValue || {});
+        if (!$('#ai-sheet').hidden) fillAiForm();
       }
       if (changes[store.KEYS.settings]) {
         state.settings = Object.assign(state.settings, changes[store.KEYS.settings].newValue);
@@ -1359,6 +1370,361 @@
     toast('已添加 ' + company + '/' + name);
   }
 
+  // ---------- 提示词AI优化配置 ----------
+  // 取某档位的自定义指令（无则 null）
+  function customPromptOf(pos) {
+    const lp = (state.aiConfig && state.aiConfig.levelPrompts) || {};
+    const v = lp[String(pos)];
+    return (typeof v === 'string' && v.trim()) ? v : null;
+  }
+  // 取某档位生效的完整指令（自定义优先，否则该档内置默认）
+  function effectiveLevelPrompt(pos) {
+    return customPromptOf(pos) || PH.llm.defaultLevelPrompt(pos);
+  }
+
+  // 刷新「优化指令」字段的只读展示态：按当前选中档 state.sysEditPos 显示
+  function refreshOptCmdView() {
+    const pos = state.sysEditPos;
+    const custom = !!customPromptOf(pos);
+    const ta = $('#ai-system');
+    ta.value = effectiveLevelPrompt(pos);
+    ta.setAttribute('readonly', '');
+    ta.classList.remove('editing');
+    $('#ai-sys-edit').textContent = '编辑';
+    $('#ai-sys-edit').classList.remove('saving');
+    $('#ai-sys-default').disabled = !custom; // 未自定义时无需重置
+    $('#ai-sys-default').textContent = '重置';
+    $('#ai-sys-hint').textContent = custom
+      ? '该档为自定义指令'
+      : '该档为内置默认指令';
+    // 滑块可用、显示档位语义
+    $('#ai-sys-slider').disabled = false;
+    $('#ai-sys-slider-label').textContent = PH.llm.sliderLabel(pos);
+  }
+  // 滑块切换档位：刷新展示
+  function onSysSliderChange() {
+    state.sysEditPos = parseInt($('#ai-sys-slider').value, 10) || 10;
+    refreshOptCmdView();
+  }
+  // 切换编辑/保存态（作用于当前档）
+  function setOptCmdEditing(on) {
+    const pos = state.sysEditPos;
+    const ta = $('#ai-system');
+    const editBtn = $('#ai-sys-edit');
+    if (on) {
+      ta.value = effectiveLevelPrompt(pos);
+      ta.removeAttribute('readonly');
+      ta.classList.add('editing');
+      ta.focus();
+      editBtn.textContent = '保存';
+      editBtn.classList.add('saving');
+      $('#ai-sys-slider').disabled = true; // 编辑中禁用滑块，避免未保存编辑丢失
+      $('#ai-sys-default').disabled = true;
+    } else {
+      // 保存当前档的自定义指令
+      const val = ta.value;
+      store.saveLevelPrompt(pos, val).then((cfg) => {
+        state.aiConfig = cfg;
+        refreshOptCmdView();
+        toast('第 ' + pos + ' 档指令已保存');
+      });
+    }
+  }
+  // 「重置」按钮：删除当前档的自定义指令（回退该档内置默认）。只影响当前档。
+  function resetOptCmdToDefault() {
+    const pos = state.sysEditPos;
+    store.clearLevelPrompt(pos).then((cfg) => {
+      state.aiConfig = cfg;
+      refreshOptCmdView();
+      toast('第 ' + pos + ' 档已重置为内置默认');
+    });
+  }
+
+  function fillAiForm() {
+    const c = state.aiConfig || {};
+    $('#ai-proto').value = c.proto === 'anthropic' ? 'anthropic' : 'openai';
+    $('#ai-base').value = c.baseUrl || '';
+    $('#ai-key').value = c.apiKey || '';
+    $('#ai-model').value = c.model || '';
+    state.sysEditPos = 10; // 打开时复位到中性档
+    $('#ai-sys-slider').value = state.sysEditPos;
+    refreshOptCmdView();
+  }
+  function openAISheet() {
+    fillAiForm();
+    $('#ai-sheet').hidden = false;
+  }
+  function closeAISheet() { $('#ai-sheet').hidden = true; }
+
+  async function saveAiConfigFromForm() {
+    const cfg = {
+      proto: $('#ai-proto').value === 'anthropic' ? 'anthropic' : 'openai',
+      baseUrl: $('#ai-base').value.trim(),
+      apiKey: $('#ai-key').value.trim(),
+      model: $('#ai-model').value.trim()
+      // 各档指令由「编辑/保存」按钮独立维护，这里不读取
+    };
+    state.aiConfig = await store.saveAiConfig(cfg);
+    closeAISheet();
+    toast('提示词AI优化配置已保存');
+  }
+
+  // 从 Base+Key 拉取模型列表，填入 datalist 供选择（仍可手动输入）
+  async function fetchModelsForAI() {
+    const proto = $('#ai-proto').value === 'anthropic' ? 'anthropic' : 'openai';
+    const baseUrl = $('#ai-base').value.trim();
+    const apiKey = $('#ai-key').value.trim();
+    if (!apiKey) { toast('请先填写 API Key'); return; }
+    const btn = $('#ai-fetch-models');
+    const oldText = btn.textContent;
+    btn.disabled = true; btn.textContent = '获取中…';
+    try {
+      const r = await PH.llm.listModels({ proto, baseUrl, apiKey });
+      if (!r.ok || !r.models.length) { toast(r.error || '获取失败'); return; }
+      // 用 datalist：保留可手输，同时提供下拉候选
+      let dl = $('#ai-model-list');
+      if (!dl) {
+        dl = document.createElement('datalist');
+        dl.id = 'ai-model-list';
+        document.body.appendChild(dl);
+        $('#ai-model').setAttribute('list', 'ai-model-list');
+      }
+      dl.innerHTML = r.models.map((id) => '<option value="' + escapeHtml(id) + '"></option>').join('');
+      toast('已获取 ' + r.models.length + ' 个模型，可在输入框下拉选择');
+    } catch (e) {
+      toast('获取失败：' + (e && e.message || e));
+    } finally {
+      btn.disabled = false; btn.textContent = oldText;
+    }
+  }
+
+  // ---------- 提示词AI优化：多阶段（选档/问答/结果）----------
+  // 判断 AI 配置是否已就绪可优化
+  function aiReady() {
+    const c = state.aiConfig || {};
+    return !!(c.apiKey && c.model);
+  }
+
+  function setOptStatus(type, msg) {
+    const field = $('#opt-status-field');
+    const box = $('#opt-status');
+    if (!msg) { field.hidden = true; box.textContent = ''; box.className = 'opt-status'; return; }
+    field.hidden = false;
+    box.textContent = msg;
+    box.className = 'opt-status ' + (type || 'info');
+  }
+
+  // 本次优化会话上下文
+  function freshOptCtx(content) {
+    return { content, sliderPos: 10, questions: [], answers: [] };
+  }
+
+  // 切换阶段：setup / qa / result
+  function setOptPhase(p) {
+    state.optPhase = p;
+    $('#opt-setup').hidden = p !== 'setup';
+    $('#opt-qa').hidden = p !== 'qa';
+    $('#opt-result-phase').hidden = p !== 'result';
+    const apply = $('#opt-apply');
+    if (p === 'setup') apply.textContent = '开始优化';
+    else if (p === 'qa') apply.textContent = '确认提交';
+    else apply.textContent = '应用';
+    // 标题
+    $('#opt-title').textContent = (p === 'qa') ? '提示词优化 · 补充细节'
+      : (p === 'result') ? '提示词优化 · 结果' : '提示词优化';
+  }
+
+  function openOptOverlay(content) {
+    state.optCtx = freshOptCtx(content);
+    const ov = $('#opt-overlay');
+    ov.classList.remove('loading');
+    $('#opt-result').value = '';
+    $('#opt-result').disabled = false;
+    $('#opt-apply').disabled = false;
+    setOptStatus('', '');
+    // 单滑块：保持上一次值，默认位置10（创意度1，中性）
+    $('#opt-slider').value = state.optCtx.sliderPos;
+    refreshSliderLabels();
+    $('#opt-qa-list').innerHTML = '';
+    setOptPhase('setup');
+    ov.hidden = false;
+  }
+  function closeOptOverlay() {
+    $('#opt-overlay').hidden = true;
+    $('#opt-overlay').classList.remove('loading');
+  }
+
+  // 单滑块语义标签实时刷新
+  function refreshSliderLabels() {
+    const pos = parseInt($('#opt-slider').value, 10) || 10;
+    const lab = $('#opt-slider-label');
+    lab.textContent = PH.llm.sliderLabel(pos);
+    // 创意度档高亮（左端）；详细度咨询档也高亮（右端）
+    const lv = PH.llm.sliderToLevels(pos);
+    lab.classList.toggle('hot', lv.creativity >= 7 || lv.detail >= 8);
+  }
+
+  // 阶段1 → 阶段2/3：开始优化
+  async function startOptimize() {
+    const ctx = state.optCtx;
+    if (!ctx || !ctx.content) { toast('提示词内容为空'); return; }
+    ctx.sliderPos = parseInt($('#opt-slider').value, 10) || 10;
+    const lv = PH.llm.sliderToLevels(ctx.sliderPos);
+    ctx.questions = []; ctx.answers = [];
+    const optBtn = $('#opt-prompt');
+    optBtn.classList.add('loading');
+    try {
+      if (lv.detail >= 8) {
+        // 详细度≥8：先批量生成咨询问题
+        await gotoQAPhase(ctx);
+      } else {
+        // 创意度档 或 详细度<8：直接出结果
+        await gotoResultPhase(ctx, []);
+      }
+    } finally {
+      optBtn.classList.remove('loading');
+    }
+  }
+
+  // 进入问答阶段：生成问题并渲染
+  async function gotoQAPhase(ctx) {
+    const c = state.aiConfig || {};
+    const ov = $('#opt-overlay');
+    setOptPhase('qa');
+    $('#opt-qa-list').innerHTML = '';
+    ov.classList.add('loading');
+    $('#opt-apply').disabled = true;
+    setOptStatus('info', '正在生成关键问题，请稍候…');
+    const lv = PH.llm.sliderToLevels(ctx.sliderPos);
+    const count = PH.llm.questionCount(lv.detail);
+    let res;
+    try {
+      res = await PH.llm.genQuestions({
+        proto: c.proto, baseUrl: c.baseUrl, apiKey: c.apiKey, model: c.model,
+        content: ctx.content, count
+      });
+    } catch (e) {
+      res = { ok: false, error: '请求异常：' + (e && e.message || e) };
+    }
+    ov.classList.remove('loading');
+    $('#opt-apply').disabled = false;
+    if (!res.ok || !res.questions || !res.questions.length) {
+      setOptStatus('error', res.error || '问题生成失败，请返回重试或降低详细度');
+      $('#opt-apply').disabled = true;
+      return;
+    }
+    ctx.questions = res.questions;
+    setOptStatus('', '');
+    renderQaList(res.questions);
+  }
+
+  // 渲染问答列表
+  function renderQaList(questions) {
+    const host = $('#opt-qa-list');
+    host.innerHTML = '';
+    questions.forEach((q, qi) => {
+      const card = document.createElement('div');
+      card.className = 'opt-q';
+      const title = document.createElement('div');
+      title.className = 'opt-q-title';
+      title.innerHTML = escapeHtml(q.q) + (q.multi ? '<span class="opt-q-multi-tag">多选</span>' : '<span class="opt-q-multi-tag">单选</span>');
+      card.appendChild(title);
+      q.options.forEach((opt, oi) => {
+        const row = document.createElement('label');
+        row.className = 'opt-q-opt';
+        const inp = document.createElement('input');
+        inp.type = q.multi ? 'checkbox' : 'radio';
+        inp.name = 'optq' + qi;
+        inp.dataset.qi = qi; inp.dataset.oi = oi;
+        row.appendChild(inp);
+        const wrap = document.createElement('div');
+        const t = document.createElement('div'); t.className = 'opt-q-opt-text'; t.textContent = opt.text;
+        wrap.appendChild(t);
+        if (opt.desc) { const d = document.createElement('div'); d.className = 'opt-q-opt-desc'; d.textContent = opt.desc; wrap.appendChild(d); }
+        row.appendChild(wrap);
+        card.appendChild(row);
+      });
+      host.appendChild(card);
+    });
+  }
+
+  // 收集问答答案 → [{q, multi, answer:[text...]}]
+  function collectQaAnswers(questions) {
+    const host = $('#opt-qa-list');
+    return questions.map((q, qi) => {
+      const checked = Array.prototype.slice.call(host.querySelectorAll('input[name="optq' + qi + '"]:checked'));
+      const texts = checked.map((el) => {
+        const oi = parseInt(el.dataset.oi, 10);
+        return q.options[oi] ? q.options[oi].text : '';
+      }).filter(Boolean);
+      return { q: q.q, multi: !!q.multi, answer: texts };
+    });
+  }
+
+  // 阶段2 → 阶段3：提交问答，生成最终结果
+  async function submitQa() {
+    const ctx = state.optCtx;
+    const qa = collectQaAnswers(ctx.questions);
+    ctx.answers = qa;
+    await gotoResultPhase(ctx, qa);
+  }
+
+  // 进入结果阶段：调用模型生成优化结果
+  async function gotoResultPhase(ctx, qa) {
+    const c = state.aiConfig || {};
+    const ov = $('#opt-overlay');
+    setOptPhase('result');
+    $('#opt-result').value = '';
+    $('#opt-result').disabled = true;
+    ov.classList.add('loading');
+    $('#opt-apply').disabled = true;
+    setOptStatus('info', '正在优化，请稍候…');
+    let res;
+    try {
+      res = await PH.llm.chatForOptimize({
+        proto: c.proto, baseUrl: c.baseUrl, apiKey: c.apiKey, model: c.model,
+        system: effectiveLevelPrompt(ctx.sliderPos),
+        content: ctx.content, sliderPos: ctx.sliderPos, qa
+      });
+    } catch (e) {
+      res = { ok: false, error: '请求异常：' + (e && e.message || e) };
+    }
+    ov.classList.remove('loading');
+    if (res.ok) {
+      $('#opt-result').value = res.text;
+      $('#opt-result').disabled = false;
+      $('#opt-apply').disabled = false;
+      setOptStatus('', '');
+    } else {
+      $('#opt-result').value = '';
+      $('#opt-result').disabled = true;
+      $('#opt-apply').disabled = true;
+      setOptStatus('error', res.error || '优化失败，请重试');
+    }
+  }
+
+  // 主入口：点击 ✨
+  function runOptimize() {
+    const form = $('#prompt-form');
+    const content = (form.content.value || '').trim();
+    if (!content) { toast('提示词内容为空，无需优化'); return; }
+    if (!aiReady()) {
+      toast('请先在设置中配置 AI 供应商与模型');
+      openSettingsSheet();
+      return;
+    }
+    openOptOverlay(content);
+  }
+
+  function applyOptimized() {
+    const text = $('#opt-result').value;
+    if (!text || !text.trim()) { toast('结果为空，未应用'); return; }
+    $('#prompt-form').content.value = text;
+    updateVarPreview();
+    closeOptOverlay();
+    toast('已应用优化结果');
+  }
+
 
   // ---------- 导入导出 ----------
   async function doExport() {
@@ -1540,6 +1906,33 @@
   $('#mm-overlay').addEventListener('click', (e) => { if (e.target === $('#mm-overlay')) closeMMOverlay(); });
   $('#mm-model-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); confirmAddModel(); } });
 
+  // 提示词AI优化配置面板
+  $('#open-ai').addEventListener('click', openAISheet);
+  $('#ai-back').addEventListener('click', closeAISheet);
+  $('#ai-fetch-models').addEventListener('click', fetchModelsForAI);
+  $('#ai-save').addEventListener('click', saveAiConfigFromForm);
+  $('#ai-sys-edit').addEventListener('click', () => {
+    const editing = !$('#ai-system').hasAttribute('readonly');
+    setOptCmdEditing(!editing); // 当前只读→进编辑；当前编辑中→保存
+  });
+  $('#ai-sys-default').addEventListener('click', resetOptCmdToDefault);
+  $('#ai-sys-slider').addEventListener('input', onSysSliderChange);
+
+  // 提示词AI优化：编辑框右下角 + 多阶段弹层
+  $('#opt-prompt').addEventListener('click', runOptimize);
+  $('#opt-close').addEventListener('click', closeOptOverlay);
+  $('#opt-cancel').addEventListener('click', closeOptOverlay);
+  // 主按钮按阶段分发：setup→开始优化 / qa→确认提交 / result→应用
+  $('#opt-apply').addEventListener('click', () => {
+    const p = state.optPhase;
+    if (p === 'setup') startOptimize();
+    else if (p === 'qa') submitQa();
+    else applyOptimized();
+  });
+  // 滑块实时刷新语义标签
+  $('#opt-slider').addEventListener('input', refreshSliderLabels);
+  $('#opt-overlay').addEventListener('click', (e) => { if (e.target === $('#opt-overlay')) closeOptOverlay(); });
+
   // 批量删除面板
   $('#btn-batch').addEventListener('click', openBatchSheet);
   $('#batch-back').addEventListener('click', closeBatchSheet);
@@ -1625,6 +2018,7 @@
     if (e.key === 'Escape') {
       if (!$('#confirm-overlay').hidden) { if (state._confirmResolve) state._confirmResolve(); return; }
       if (!$('#prompt-overlay').hidden) { if (state._promptResolve) state._promptResolve(); return; }
+      if (!$('#opt-overlay').hidden) { closeOptOverlay(); return; }
       if (!$('#detail-sheet').hidden) { closeDetail(); return; }
       if (!$('#catm-sheet').hidden) { $('#catm-sheet').hidden = true; return; }
       if (!$('#tagm-sheet').hidden) { $('#tagm-sheet').hidden = true; return; }
@@ -1635,6 +2029,7 @@
       if (!$('#mm-overlay').hidden) { closeMMOverlay(); return; }
       if (!$('#modal-overlay').hidden) { closeVariableModal(); return; }
       if (!$('#cat-overlay').hidden) { $('#cat-overlay').hidden = true; return; }
+      if (!$('#ai-sheet').hidden) { closeAISheet(); return; }
       if (!$('#import-overlay').hidden) { $('#import-overlay').hidden = true; return; }
     }
     // 列表键盘导航
