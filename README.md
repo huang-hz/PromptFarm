@@ -1,152 +1,189 @@
-# PromptFlash — 提示词管理浏览器插件
+# PromptFlash
 
-一个用于**场景化提示词管理**的浏览器扩展，支持 Chrome / Edge（及所有 Chromium 内核浏览器）。
-专注检索体验：模糊匹配、拼写纠错、**拼音/首字母搜索**、标签分类筛选，配合变量模板与一键复制/插入。
+PromptFlash 是一个本地优先的提示词管理浏览器扩展，支持 Chrome、Edge 以及其他 Chromium 内核浏览器。它提供提示词搜索、分类标签、变量模板、复制/插入、导入导出、回收站、模型适配标记，以及可选的 AI 提示词优化能力。
 
-> 纯前端、无后端、无构建步骤。数据全部存储在本地（`chrome.storage.local`）。
+项目是纯前端实现：无后端、无构建步骤、无默认远程服务。提示词数据默认存储在 `chrome.storage.local`。
 
----
-
-## ✨ 核心特性
+## 功能
 
 | 能力 | 说明 |
-|------|------|
-| 🔍 **多策略检索** | 精确子串 + 词首前缀 + Levenshtein 容错（纠拼写错误）+ 拼音/首字母。输入 `xy` 即可命中“写作”、`xieyoujian` 命中“写邮件” |
-| 🧩 **变量模板** | 提示词中写 `{{变量名}}`、`{{变量名=默认值}}`、`{{变量名|输入提示}}`，使用时弹表单逐个填值 |
-| 📋 **一键使用** | 复制到剪贴板 / 自动插入当前页面输入框（textarea、input、contenteditable 均支持，含 React 等框架兼容的 input 事件） |
-| 🗂 **分类与标签** | 多级分类 + 标签云，可叠加关键词搜索做精准筛选 |
-| ⭐ **收藏与最近** | 常用置顶、按使用频率/最近使用排序，高频内容触手可及 |
-| 📥 **导入导出** | JSON 格式一键备份与恢复，支持合并 / 替换两种模式 |
-| 🎨 **明暗主题** | 跟随系统或手动切换 |
-| ⌨️ **键盘操作** | `↑↓` 选择、`Enter` 使用、`Cmd/Ctrl+K` 聚焦搜索、`Alt+P` 呼出侧边栏 |
+| --- | --- |
+| 多策略搜索 | 支持中文关键词、大小写不敏感搜索、模糊匹配、拼音全拼和首字母搜索 |
+| 分类与标签 | 分类可排序；标签按分类汇总，可重命名、删除、排序 |
+| 变量模板 | 支持 `{{变量名}}`、`{{变量名=默认值}}`、`{{变量名|输入提示}}` |
+| 一键使用 | 可复制到剪贴板，或插入当前网页的 `input`、`textarea`、`contenteditable` |
+| 详情编辑 | 主列表进入详情页，支持编辑/预览切换、创建副本、适配模型标记 |
+| 批量管理 | 可按分类/标签筛选并批量移入回收站 |
+| 回收站 | 删除的提示词先软删除，可还原或永久删除 |
+| 导入导出 | JSON 备份，支持合并和替换；合并时按内容指纹去重 |
+| 模型目录 | 内置供应商/模型清单，可本地编辑并控制激活模型 |
+| AI 优化 | 可配置 OpenAI 兼容或 Anthropic 兼容接口，对提示词进行多档位优化 |
+| 主题 | 支持跟随系统、亮色、暗色 |
 
----
-
-## 🚀 安装与测试（开发者模式）
+## 安装
 
 ### Chrome
+
 1. 打开 `chrome://extensions/`
-2. 右上角打开 **「开发者模式」** 开关
-3. 点击 **「加载已解压的扩展程序」**
+2. 打开右上角「开发者模式」
+3. 点击「加载已解压的扩展程序」
 4. 选择本目录 `prompt-manager-extension/`
 
 ### Edge
+
 1. 打开 `edge://extensions/`
-2. 打开左下 **「开发人员模式」**
-3. 点击 **「加载解压缩的扩展」**
+2. 打开「开发人员模式」
+3. 点击「加载解压缩的扩展」
 4. 选择本目录 `prompt-manager-extension/`
 
-### 使用
-- 点击工具栏的 ⚡ 图标 → 打开侧边栏（插件唯一界面，全程不离开面板）
-- 顶部 **「🔍 使用 / 🗂 管理」** 切换两个视图：
-  - **使用**：搜索 + 筛选 + 一键复制/插入
-  - **管理**：提示词卡片列表（分类/标签筛选 + 搜索）+ 点击进入全屏编辑表单做增删改查；底部可导入/导出
-- 在任意网页选中文字右键 → 「在 PromptFlash 中搜索」
+## 使用
 
-> 首次加载会自动写入 12 条示例提示词（含中文标题），可直接用来验证拼音搜索。
+- 点击工具栏图标或按 `Alt+P` 打开侧边栏。
+- 在主列表顶部搜索提示词。可以输入中文、英文、拼音或拼音首字母，例如 `xy`、`xieyoujian`。
+- 点击提示词卡片进入详情页；卡片按钮可直接复制、插入、收藏或创建副本。
+- 在提示词内容中写变量占位符，使用时会弹出表单填写变量值。
+- 底部可导入、导出备份，也可打开回收站。
+- 设置中可调整主题、分类/标签展示数量、供应商模型目录和 AI 优化配置。
 
----
+## AI 优化
 
-## 🎯 检索能力演示
+AI 优化是可选功能，默认不会访问任何 AI 服务。使用前需要在「设置 -> 提示词AI优化」中配置：
 
-内置示例中尝试这些查询（在侧边栏搜索框）：
+- 接口协议：OpenAI 兼容或 Anthropic 兼容
+- Base URL：可留空使用协议默认地址，也可填写中转服务地址
+- API Key：保存在本地 `chrome.storage.local`
+- 模型：可手动输入，也可通过接口拉取模型列表
 
-| 输入 | 命中 | 原理 |
-|------|------|------|
-| `xy` | 写一封邮件 / 写邮件 | 拼音首字母 |
-| `xieyoujian` | 写邮件 | 拼音全拼 |
-| `daim` | 代码解释器 | 首字母 `dm`…（模糊） |
-| `SQL` / `sql` | SQL查询优化 | 不区分大小写 |
-| `会议` | 会议纪要整理 | 中文精确 |
-| `test` | 生成单元测试 | 词根模糊 |
+优化流程使用 20 档滑块：
 
----
+- 左侧偏创意/虚构：模型会在保持原目标的前提下补充场景化信息。
+- 右侧偏详细/咨询：模型不会虚构信息，高档位会先生成澄清问题，再生成优化结果。
 
-## ⌨️ 快捷键
+## 权限说明
 
-| 快捷键 | 作用 | 备注 |
-|--------|------|------|
-| `Alt+P` | 打开侧边栏 | 可在扩展快捷键设置中改 |
-| `Alt+Shift+P` | 等同点击图标 | `_execute_action` |
-| `Cmd/Ctrl+K` | 聚焦搜索框（侧边栏内） | — |
-| `Cmd/Ctrl+Enter` | 保存（编辑器内） | — |
-| `↑` `↓` | 上下选择结果（使用视图） | — |
-| `Enter` | 使用当前选中 | — |
-| `Esc` | 清空搜索 / 关闭弹层 | — |
+| 权限 | 用途 |
+| --- | --- |
+| `storage` | 保存提示词、分类、设置、回收站、AI 配置等本地数据 |
+| `sidePanel` | 显示扩展侧边栏 |
+| `activeTab` | 在用户主动操作后访问当前标签页 |
+| `scripting` | 动态注入 `content/inject.js`，把文本插入当前网页输入框 |
+| `contextMenus` | 在网页选中文字后右键「在 PromptFlash 中搜索」 |
+| `alarms` | 在长时间 AI 请求期间保持 MV3 service worker 存活 |
+| `<all_urls>` | 允许 background 代理用户配置的跨域 LLM API 请求，并支持在普通网页中插入文本 |
 
----
+更完整的隐私说明见 [PRIVACY.md](PRIVACY.md)。
 
-## 🏗 项目结构
+## 项目结构
 
-```
+```text
 prompt-manager-extension/
 ├── manifest.json              # MV3 配置、权限、快捷键
-├── background.js              # service worker：图标/快捷键/右键菜单/注入
+├── background.js              # service worker：侧边栏、右键菜单、插入、LLM 请求代理
+├── content/
+│   └── inject.js              # 注入当前网页输入框
 ├── lib/
-│   ├── store.js               # 存储层 CRUD、导入导出、使用统计
-│   ├── search.js              # 检索引擎（多策略打分）
-│   ├── fuzzy.js               # Levenshtein 模糊匹配
+│   ├── fuzzy.js               # Levenshtein、子串、前缀等基础匹配
+│   ├── search.js              # 多字段加权搜索和拼音索引
 │   ├── template.js            # {{变量}} 解析与填充
-│   └── pinyin/pinyin.min.js   # 拼音库（vendored，离线可用）
-├── sidepanel/                 # 侧边栏（插件唯一界面：使用 + 管理 双视图）
-│   ├── sidepanel.html         # 单页：顶部视图切换 + 使用视图 + 管理视图 + 编辑器覆盖层
+│   ├── models.js              # 本地供应商/模型目录
+│   ├── store.js               # chrome.storage.local 数据层
+│   ├── llm.js                 # OpenAI/Anthropic 兼容请求封装
+│   └── pinyin/pinyin.min.js   # vendored pinyin-pro
+├── seed/
+│   └── seed-data.js           # 首次安装示例数据
+├── sidepanel/
+│   ├── sidepanel.html         # 侧边栏单页 UI
 │   ├── sidepanel.css
-│   └── sidepanel.js
-├── content/inject.js          # 注入页面输入框
-├── seed/seed-data.js          # 初始示例提示词
-├── icons/                     # 扩展图标（16/32/48/128）
-└── tools/make-icons.js        # 图标生成脚本（可选）
+│   ├── sidepanel.js
+│   └── icons.html             # SVG sprite
+├── icons/                     # 扩展 PNG 图标
+└── tools/
+    └── make-icons.js          # 生成扩展图标
 ```
 
-### 技术说明
-- **Manifest V3**，纯原生 JS（IIFE 命名空间 `PH.*`），无框架、无打包、无独立页面
-- **单页侧边栏**：顶部切换「使用 / 管理」两个视图，编辑提示词用滑入式全屏覆盖层（sheet），全程不打开新标签页
-- **存储**：`chrome.storage.local`，提示词保存时预生成拼音索引，检索零延迟
-- **插入输入框**：通过 `chrome.scripting.executeScript` 在用户主动点击时注入，仅申请 `activeTab`，无需宽泛 host 权限
-- **拼音**：使用 [pinyin-pro](https://github.com/zh-lx/pinyin-pro)（vendored 到 `lib/pinyin/`），完全离线
+## 技术设计
 
-### 重新生成图标（可选）
+- Manifest V3 扩展。
+- 无框架、无打包，脚本通过 `<script>` 顺序加载。
+- 模块使用 IIFE 挂载到全局命名空间 `PH.*`。
+- 主界面是一个 side panel 单页应用，使用一个 `state` 对象和手工 DOM 渲染管理状态。
+- 提示词保存时预生成拼音索引 `_index`，搜索时减少拼音计算。
+- 导出数据使用 `_hash` 内容指纹，合并导入时按指纹去重。
+- 删除采用软删除，数据先进入 `ph_trash`。
+- LLM 请求集中由 background service worker 发起，side panel 通过 `chrome.runtime.sendMessage` 调用。
+
+## 数据格式
+
+导出的 JSON 大致结构：
+
+```json
+{
+  "version": 2,
+  "exportedAt": "2026-01-01T00:00:00.000Z",
+  "prompts": [
+    {
+      "id": "p_xxx",
+      "title": "写一封商务邮件",
+      "content": "请帮我撰写一封商务邮件。{{邮件主题}}",
+      "description": "快速生成正式的商务沟通邮件。",
+      "categoryId": "c_write",
+      "tags": ["邮件", "商务"],
+      "models": ["OpenAI/GPT-5.5"],
+      "favorite": true,
+      "usageCount": 3,
+      "lastUsed": 1700000000000,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000000000,
+      "_hash": "PF-..."
+    }
+  ],
+  "categories": [
+    { "id": "c_write", "name": "写作", "sortOrder": 0 }
+  ],
+  "settings": {
+    "defaultAction": "copy",
+    "theme": "auto"
+  }
+}
+```
+
+## 开发
+
+本项目目前不需要安装依赖。
+
+重新生成扩展图标：
+
 ```bash
 node tools/make-icons.js
 ```
 
----
+运行 `tools/eval-*.mjs` 评估脚本前，需要通过环境变量提供 API Key，不要把密钥写进脚本：
 
-## 🔐 权限说明
-
-| 权限 | 用途 |
-|------|------|
-| `storage` | 本地存储提示词数据 |
-| `sidePanel` | 侧边栏界面 |
-| `activeTab` | 获取当前标签页（仅用户主动操作时） |
-| `scripting` | 把文本注入当前页面输入框 |
-| `contextMenus` | 右键「搜索选中文字」 |
-
-所有数据均在本地处理，不向任何服务器发送。
-
----
-
-## 📄 数据格式
-
-导出的 JSON 结构：
-
-```json
-{
-  "version": 1,
-  "exportedAt": "2026-01-01T00:00:00.000Z",
-  "prompts": [{
-    "id": "p_xxx",
-    "title": "写一封邮件",
-    "content": "请帮我写邮件…{{主题}}",
-    "description": "...",
-    "categoryId": "c_write",
-    "tags": ["邮件", "商务"],
-    "favorite": true,
-    "usageCount": 3,
-    "createdAt": 1700000000000,
-    "updatedAt": 1700000000000
-  }],
-  "categories": [{ "id": "c_write", "name": "写作" }],
-  "settings": { "defaultAction": "copy", "theme": "auto" }
-}
+```bash
+PF_EVAL_API_KEY=your_key node tools/eval-deepseek20.mjs
 ```
+
+也可以使用脚本对应的供应商变量，例如 `DEEPSEEK_API_KEY` 或 `VVEAI_API_KEY`。
+
+建议发布前手动测试：
+
+- 首次安装是否写入示例数据
+- 中文、英文、拼音、首字母搜索
+- 新建、编辑、复制、插入、收藏、创建副本
+- 变量模板填写和预览
+- 分类/标签管理和排序
+- 批量删除、回收站还原、永久删除
+- 导入导出合并/替换
+- AI 配置为空时的提示
+- 配置 AI 后模型列表拉取、问题生成和优化结果
+- 在受限页面插入失败时是否降级复制
+
+## 开源许可
+
+本项目使用 MIT License，详见 [LICENSE](LICENSE)。
+
+第三方组件和资源说明见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+## 贡献
+
+欢迎提交 issue 和 pull request。贡献前请阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
