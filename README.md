@@ -157,14 +157,6 @@ prompt-manager-extension/
 node tools/make-icons.js
 ```
 
-运行 `tools/eval-*.mjs` 评估脚本前，需要通过环境变量提供 API Key，不要把密钥写进脚本：
-
-```bash
-PF_EVAL_API_KEY=your_key node tools/eval-deepseek20.mjs
-```
-
-也可以使用脚本对应的供应商变量，例如 `DEEPSEEK_API_KEY` 或 `VVEAI_API_KEY`。
-
 建议发布前手动测试：
 
 - 首次安装是否写入示例数据

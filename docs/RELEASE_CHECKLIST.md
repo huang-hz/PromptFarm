@@ -9,7 +9,7 @@ Use this before publishing a GitHub release or uploading a zip package.
 - [ ] `README.md` matches the current UI and permissions.
 - [ ] `PRIVACY.md`, `SECURITY.md`, `LICENSE`, and `THIRD_PARTY_NOTICES.md` are present.
 - [ ] Third-party notices are accurate.
-- [ ] `tools/eval-*.mjs` and other scripts contain no hard-coded API keys.
+- [ ] No ad hoc evaluation scripts or hard-coded API keys are present.
 
 ## Manual Extension Test
 

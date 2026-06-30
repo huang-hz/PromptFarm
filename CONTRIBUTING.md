@@ -17,7 +17,7 @@ No package installation is required for the current codebase.
 - Existing modules use IIFE files and the `PH.*` namespace.
 - Prefer small, focused changes.
 - Do not commit exported prompt backups, API keys, `.env` files, browser profile data, or generated test logs.
-- Evaluation scripts under `tools/eval-*.mjs` must read keys from environment variables such as `PF_EVAL_API_KEY`, `DEEPSEEK_API_KEY`, or `VVEAI_API_KEY`.
+- Keep ad hoc evaluation scripts outside this extension repository.
 - Keep UI copy concise and consistent with the existing Chinese interface.
 
 ## Testing Before a Pull Request
