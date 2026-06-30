@@ -19,6 +19,7 @@ dist/
 release/
 
 # 评估脚本输出
+tools/eval-*.mjs
 optimize_eval*.csv
 optimize_eval*.json
 optimize_eval*.progress.json
