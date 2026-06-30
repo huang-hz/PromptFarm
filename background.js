@@ -3,7 +3,7 @@
  *  1. 点击工具栏图标 → 打开/聚焦侧边栏
  *  2. 快捷键 Alt+P 打开侧边栏
  *  3. 接收 sidepanel 的 insert-text 消息 → 向当前标签页注入文本
- *  4. 右键菜单「在 PromptFlash 中搜索选中文本」
+ *  4. 右键菜单「在 PromptFarm 中搜索选中文本」
  */
 'use strict';
 
@@ -39,7 +39,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   try {
     chrome.contextMenus.create({
       id: 'ph-search-selection',
-      title: '在 PromptFlash 中搜索“%s”',
+      title: '在 PromptFarm 中搜索“%s”',
       contexts: ['selection']
     });
   } catch (e) { /* 已存在 */ }

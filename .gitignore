@@ -4,6 +4,7 @@ node_modules/
 # 备份文件（导出的提示词备份）
 *.bak
 promptflash-backup-*.json
+promptfarm-backup-*.json
 
 # 本地密钥与私有配置
 .env

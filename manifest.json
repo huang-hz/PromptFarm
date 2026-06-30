@@ -1,17 +1,23 @@
 {
   "manifest_version": 3,
-  "name": "PromptFlash - 提示词管理",
+  "name": "PromptFarm - 提示词管理",
   "version": "0.1.0",
   "description": "场景化提示词管理：模糊/拼音检索、变量模板、一键复制或插入输入框。支持 Chrome 与 Edge。",
   "minimum_chrome_version": "114",
   "icons": {
-    "16": "icons/icon-16.png",
-    "32": "icons/icon-32.png",
-    "48": "icons/icon-48.png",
-    "128": "icons/icon-128.png"
+    "16": "icons/promptfarm.png",
+    "32": "icons/promptfarm.png",
+    "48": "icons/promptfarm.png",
+    "128": "icons/promptfarm.png"
   },
   "action": {
-    "default_title": "PromptFlash（打开侧边栏）"
+    "default_icon": {
+      "16": "icons/promptfarm.png",
+      "32": "icons/promptfarm.png",
+      "48": "icons/promptfarm.png",
+      "128": "icons/promptfarm.png"
+    },
+    "default_title": "PromptFarm（打开侧边栏）"
   },
   "background": {
     "service_worker": "background.js"
@@ -42,7 +48,7 @@
         "default": "Alt+P",
         "mac": "Alt+P"
       },
-      "description": "打开 PromptFlash 侧边栏"
+      "description": "打开 PromptFarm 侧边栏"
     },
     "_execute_action": {
       "suggested_key": {

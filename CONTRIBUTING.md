@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping improve PromptFlash.
+Thanks for helping improve PromptFarm.
 
 ## Development Setup
 

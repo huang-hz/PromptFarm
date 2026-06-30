@@ -21,4 +21,4 @@ Do not include real API keys, browser profile data, exported prompt backups with
 
 ## Extension-Specific Notes
 
-PromptFlash stores user data and optional AI API keys in `chrome.storage.local`. Treat access to an installed browser profile as access to this extension's local data.
+PromptFarm stores user data and optional AI API keys in `chrome.storage.local`. Treat access to an installed browser profile as access to this extension's local data.

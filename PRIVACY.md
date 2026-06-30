@@ -1,10 +1,10 @@
 # Privacy Policy
 
-PromptFlash is designed as a local-first browser extension. This document explains what data is stored, when network requests happen, and why browser permissions are requested.
+PromptFarm is designed as a local-first browser extension. This document explains what data is stored, when network requests happen, and why browser permissions are requested.
 
 ## Data Stored Locally
 
-PromptFlash stores the following data in `chrome.storage.local`:
+PromptFarm stores the following data in `chrome.storage.local`:
 
 - Prompts and prompt metadata
 - Categories and tag ordering
@@ -18,7 +18,7 @@ This data is stored by the browser extension on the user's device. The project d
 
 ## Network Requests
 
-PromptFlash does not send prompt data to a remote service by default.
+PromptFarm does not send prompt data to a remote service by default.
 
 Network requests happen only when the user uses AI optimization features:
 
@@ -31,7 +31,7 @@ The destination is controlled by the user through the AI settings:
 - Anthropic-compatible endpoint
 - A custom Base URL entered by the user
 
-PromptFlash does not proxy requests through a project-owned server.
+PromptFarm does not proxy requests through a project-owned server.
 
 ## API Keys
 
@@ -41,9 +41,9 @@ Avoid using shared machines for sensitive keys. Remove the key from settings bef
 
 ## Web Page Access
 
-PromptFlash can insert generated text into the active tab after a user action. To do that, it dynamically injects `content/inject.js` into the active page and looks for the focused editable element.
+PromptFarm can insert generated text into the active tab after a user action. To do that, it dynamically injects `content/inject.js` into the active page and looks for the focused editable element.
 
-PromptFlash does not continuously monitor page content. It only attempts insertion when the user clicks an insert action.
+PromptFarm does not continuously monitor page content. It only attempts insertion when the user clicks an insert action.
 
 ## Permissions
 
