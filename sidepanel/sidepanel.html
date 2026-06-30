@@ -345,7 +345,7 @@
         </div>
         <div class="modal-body">
           <div class="field opt-status-field" id="opt-status-field" hidden>
-            <div class="opt-status" id="opt-status"></div>
+            <ol class="opt-steps" id="opt-steps"></ol>
           </div>
 
           <!-- 阶段1：选档（单滑块 20 档：左创意虚构 ↔ 右详细咨询）-->
@@ -360,9 +360,10 @@
             </div>
           </div>
 
-          <!-- 阶段2：咨询问答 -->
+          <!-- 阶段2：咨询问答（分轮翻页） -->
           <div class="opt-phase opt-qa" id="opt-qa" hidden>
             <div class="opt-qa-intro">为获得更精准的结果，请回答以下问题（可跳过）：</div>
+            <div class="opt-qa-progress" id="opt-qa-progress"></div>
             <div id="opt-qa-list"></div>
           </div>
 
@@ -376,6 +377,7 @@
         </div>
         <div class="modal-actions">
           <button class="btn ghost" id="opt-cancel">取消</button>
+          <button class="btn ghost" id="opt-qa-prev" hidden>上一轮</button>
           <button class="btn primary" id="opt-apply">开始优化</button>
         </div>
       </div>

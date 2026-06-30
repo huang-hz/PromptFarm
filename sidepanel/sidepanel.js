@@ -46,7 +46,8 @@
     sysEditPos: 10,             // 设置页「优化指令」当前查看/编辑的档位(1-20)
     // 提示词优化会话（多阶段）
     optPhase: 'setup',          // setup | qa | result
-    optCtx: null                // { content, creativity, detail, questions, answers }
+    optCtx: null,               // { content, creativity, detail, questions, answers }
+    optRetry: null              // 出错重试态：null | 'qa' | 'result'（主按钮变红「重试」）
   };
 
   // ---------- DOM ----------
@@ -1505,18 +1506,70 @@
     return !!(c.apiKey && c.model);
   }
 
-  function setOptStatus(type, msg) {
+  // 让出一帧，确保步骤渲染先绘制到屏幕（避免被紧随其后的 await 吞掉）
+  const tick = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+  // 把原始错误（如 Failed to fetch）翻译成用户可读、便于定位的友好文案
+  function friendlyError(err) {
+    const e = String(err || '');
+    if (/failed to fetch|networkerror|load failed/i.test(e)) return '网络请求失败（可能超时或网络中断）';
+    if (/timeout|timed out/i.test(e)) return '请求超时';
+    if (/401|unauthorized|invalid api key/i.test(e)) return 'API Key 无效或未授权';
+    if (/404|not found|model/i.test(e)) return '模型不可用或地址错误';
+    return e || '未知错误';
+  }
+
+  // 渲染步骤进度列表。steps=[{label}]；activeIdx 当前进行中（转圈）；errorIdx 出错变红（附带 errMsg）
+  function renderOptSteps(steps, activeIdx, errorIdx, errMsg) {
     const field = $('#opt-status-field');
-    const box = $('#opt-status');
-    if (!msg) { field.hidden = true; box.textContent = ''; box.className = 'opt-status'; return; }
+    const host = $('#opt-steps');
+    if (!steps || !steps.length) { field.hidden = true; host.innerHTML = ''; return; }
     field.hidden = false;
-    box.textContent = msg;
-    box.className = 'opt-status ' + (type || 'info');
+    host.innerHTML = '';
+    steps.forEach((s, i) => {
+      const li = document.createElement('li');
+      let state = 'pending';
+      if (errorIdx === i) state = 'error';
+      else if (i < activeIdx) state = 'done';
+      else if (i === activeIdx) state = 'active';
+      li.className = 'opt-step ' + state;
+      const icon = document.createElement('span');
+      icon.className = 'opt-step-icon';
+      icon.innerHTML = (state === 'done') ? '<svg class="ic"><use href="#ic-check"/></svg>'
+        : (state === 'error') ? '<svg class="ic"><use href="#ic-close"/></svg>' : '';
+      const txt = document.createElement('span');
+      txt.className = 'opt-step-text';
+      txt.textContent = s.label;
+      li.appendChild(icon); li.appendChild(txt);
+      if (state === 'error' && errMsg) {
+        const em = document.createElement('div');
+        em.className = 'opt-step-err';
+        em.textContent = errMsg;
+        li.appendChild(em);
+      }
+      host.appendChild(li);
+    });
+  }
+  // 清空步骤区（进入非等待态时调用）
+  function clearOptSteps() { renderOptSteps([], -1); }
+  // 出错重试：主按钮变红「重试」并启用；kind='qa'(重新生成问题) | 'result'(重新调用模型)
+  function enableRetry(kind) {
+    state.optRetry = kind;
+    const btn = $('#opt-apply');
+    btn.disabled = false;
+    btn.textContent = '重试';
+    btn.classList.add('danger');
+    $('#opt-qa-prev').hidden = true; // 重试态隐藏「上一轮」
+  }
+  // 清除重试态：恢复主按钮常规样式
+  function clearRetry() {
+    state.optRetry = null;
+    $('#opt-apply').classList.remove('danger');
   }
 
   // 本次优化会话上下文
   function freshOptCtx(content) {
-    return { content, sliderPos: 10, questions: [], answers: [] };
+    return { content, sliderPos: 10, questions: [], answers: [], qaIndex: 0 };
   }
 
   // 切换阶段：setup / qa / result
@@ -1527,8 +1580,8 @@
     $('#opt-result-phase').hidden = p !== 'result';
     const apply = $('#opt-apply');
     if (p === 'setup') apply.textContent = '开始优化';
-    else if (p === 'qa') apply.textContent = '确认提交';
-    else apply.textContent = '应用';
+    else if (p === 'result') apply.textContent = '应用';
+    // qa 阶段的主按钮文案由 updateQaNav 按当前轮次动态控制
     // 标题
     $('#opt-title').textContent = (p === 'qa') ? '提示词优化 · 补充细节'
       : (p === 'result') ? '提示词优化 · 结果' : '提示词优化';
@@ -1541,7 +1594,8 @@
     $('#opt-result').value = '';
     $('#opt-result').disabled = false;
     $('#opt-apply').disabled = false;
-    setOptStatus('', '');
+    clearOptSteps();
+    clearRetry();
     // 单滑块：保持上一次值，默认位置10（创意度1，中性）
     $('#opt-slider').value = state.optCtx.sliderPos;
     refreshSliderLabels();
@@ -1586,85 +1640,152 @@
     }
   }
 
-  // 进入问答阶段：生成问题并渲染
+  // 进入问答阶段：生成问题（按档位范围），进入分轮翻页
   async function gotoQAPhase(ctx) {
     const c = state.aiConfig || {};
     const ov = $('#opt-overlay');
     setOptPhase('qa');
     $('#opt-qa-list').innerHTML = '';
+    $('#opt-qa-progress').textContent = '';
     ov.classList.add('loading');
     $('#opt-apply').disabled = true;
-    setOptStatus('info', '正在生成关键问题，请稍候…');
+    $('#opt-qa-prev').hidden = true;
+    const STEPS = [
+      { label: '分析提示词需求' },
+      { label: '生成澄清问题' },   // 联网，最慢
+      { label: '准备提问' }
+    ];
+    renderOptSteps(STEPS, 0);
+    // 步骤1：分析（轻量，给用户即时反馈）
+    await tick();
+    renderOptSteps(STEPS, 1);
     const lv = PH.llm.sliderToLevels(ctx.sliderPos);
-    const count = PH.llm.questionCount(lv.detail);
+    const range = PH.llm.questionRange(lv.detail);
     let res;
     try {
       res = await PH.llm.genQuestions({
         proto: c.proto, baseUrl: c.baseUrl, apiKey: c.apiKey, model: c.model,
-        content: ctx.content, count
+        content: ctx.content, range
       });
     } catch (e) {
-      res = { ok: false, error: '请求异常：' + (e && e.message || e) };
+      res = { ok: false, error: friendlyError((e && e.message) || e) };
     }
-    ov.classList.remove('loading');
-    $('#opt-apply').disabled = false;
     if (!res.ok || !res.questions || !res.questions.length) {
-      setOptStatus('error', res.error || '问题生成失败，请返回重试或降低详细度');
-      $('#opt-apply').disabled = true;
+      ov.classList.remove('loading');
+      renderOptSteps(STEPS, 1, 1, res.error || '问题生成失败，请重试或降低详细度');
+      enableRetry('qa');
       return;
     }
+    // 步骤3：准备提问
+    renderOptSteps(STEPS, 2);
     ctx.questions = res.questions;
-    setOptStatus('', '');
-    renderQaList(res.questions);
+    ctx.answers = res.questions.map(() => null); // 预置占位，逐轮填充
+    ctx.qaIndex = 0;
+    clearOptSteps();
+    clearRetry();
+    ov.classList.remove('loading');
+    renderQaCurrent();
   }
 
-  // 渲染问答列表
-  function renderQaList(questions) {
+  // 渲染当前第 ctx.qaIndex 题（单题卡片）
+  function renderQaCurrent() {
+    const ctx = state.optCtx;
+    const i = ctx.qaIndex;
+    const q = ctx.questions[i];
     const host = $('#opt-qa-list');
     host.innerHTML = '';
-    questions.forEach((q, qi) => {
-      const card = document.createElement('div');
-      card.className = 'opt-q';
-      const title = document.createElement('div');
-      title.className = 'opt-q-title';
-      title.innerHTML = escapeHtml(q.q) + (q.multi ? '<span class="opt-q-multi-tag">多选</span>' : '<span class="opt-q-multi-tag">单选</span>');
-      card.appendChild(title);
-      q.options.forEach((opt, oi) => {
-        const row = document.createElement('label');
-        row.className = 'opt-q-opt';
-        const inp = document.createElement('input');
-        inp.type = q.multi ? 'checkbox' : 'radio';
-        inp.name = 'optq' + qi;
-        inp.dataset.qi = qi; inp.dataset.oi = oi;
-        row.appendChild(inp);
-        const wrap = document.createElement('div');
-        const t = document.createElement('div'); t.className = 'opt-q-opt-text'; t.textContent = opt.text;
-        wrap.appendChild(t);
-        if (opt.desc) { const d = document.createElement('div'); d.className = 'opt-q-opt-desc'; d.textContent = opt.desc; wrap.appendChild(d); }
-        row.appendChild(wrap);
-        card.appendChild(row);
-      });
-      host.appendChild(card);
+    const card = document.createElement('div');
+    card.className = 'opt-q';
+    const title = document.createElement('div');
+    title.className = 'opt-q-title';
+    title.innerHTML = escapeHtml(q.q) + (q.multi ? '<span class="opt-q-multi-tag">多选</span>' : '<span class="opt-q-multi-tag">单选</span>');
+    card.appendChild(title);
+    q.options.forEach((opt, oi) => {
+      const row = document.createElement('label');
+      row.className = 'opt-q-opt';
+      const inp = document.createElement('input');
+      inp.type = q.multi ? 'checkbox' : 'radio';
+      inp.name = 'optq-cur';
+      inp.dataset.oi = oi;
+      row.appendChild(inp);
+      const wrap = document.createElement('div');
+      const t = document.createElement('div'); t.className = 'opt-q-opt-text'; t.textContent = opt.text;
+      wrap.appendChild(t);
+      if (opt.desc) { const d = document.createElement('div'); d.className = 'opt-q-opt-desc'; d.textContent = opt.desc; wrap.appendChild(d); }
+      row.appendChild(wrap);
+      card.appendChild(row);
     });
+    host.appendChild(card);
+    // 回显已暂存的答案（用户「上一轮」返回时保留）
+    restoreQaAnswer(i);
+    updateQaNav();
   }
 
-  // 收集问答答案 → [{q, multi, answer:[text...]}]
-  function collectQaAnswers(questions) {
-    const host = $('#opt-qa-list');
-    return questions.map((q, qi) => {
-      const checked = Array.prototype.slice.call(host.querySelectorAll('input[name="optq' + qi + '"]:checked'));
-      const texts = checked.map((el) => {
-        const oi = parseInt(el.dataset.oi, 10);
-        return q.options[oi] ? q.options[oi].text : '';
-      }).filter(Boolean);
-      return { q: q.q, multi: !!q.multi, answer: texts };
-    });
-  }
-
-  // 阶段2 → 阶段3：提交问答，生成最终结果
-  async function submitQa() {
+  // 回显第 i 题已暂存的答案
+  function restoreQaAnswer(i) {
     const ctx = state.optCtx;
-    const qa = collectQaAnswers(ctx.questions);
+    const saved = ctx.answers[i];
+    if (!saved || !Array.isArray(saved.answer) || !saved.answer.length) return;
+    const q = ctx.questions[i];
+    const host = $('#opt-qa-list');
+    saved.answer.forEach((txt) => {
+      const oi = q.options.findIndex((o) => o.text === txt);
+      if (oi >= 0) {
+        const el = host.querySelector('input[name="optq-cur"][data-oi="' + oi + '"]');
+        if (el) el.checked = true;
+      }
+    });
+  }
+
+  // 更新翻页导航：进度文本 + 主按钮文案 + 「上一轮」显隐
+  function updateQaNav() {
+    const ctx = state.optCtx;
+    const i = ctx.qaIndex;
+    const total = ctx.questions.length;
+    $('#opt-qa-progress').textContent = '第 ' + (i + 1) + ' / ' + total + ' 题';
+    $('#opt-qa-prev').hidden = i === 0;           // 第 1 题无「上一轮」
+    $('#opt-apply').textContent = (i === total - 1) ? '生成结果' : '下一轮';
+    $('#opt-apply').disabled = false;
+  }
+
+  // 暂存当前题答案到 ctx.answers[i]
+  function stashCurrentAnswer() {
+    const ctx = state.optCtx;
+    const i = ctx.qaIndex;
+    const q = ctx.questions[i];
+    const host = $('#opt-qa-list');
+    const checked = Array.prototype.slice.call(host.querySelectorAll('input[name="optq-cur"]:checked'));
+    const texts = checked.map((el) => {
+      const oi = parseInt(el.dataset.oi, 10);
+      return q.options[oi] ? q.options[oi].text : '';
+    }).filter(Boolean);
+    ctx.answers[i] = { q: q.q, multi: !!q.multi, answer: texts };
+  }
+
+  // 下一轮：暂存 → 末题则生成结果，否则进入下一题
+  async function nextQa() {
+    const ctx = state.optCtx;
+    stashCurrentAnswer();
+    if (ctx.qaIndex >= ctx.questions.length - 1) {
+      await finishQa();
+      return;
+    }
+    ctx.qaIndex++;
+    renderQaCurrent();
+  }
+  // 上一轮：暂存 → 回到上一题
+  function prevQa() {
+    const ctx = state.optCtx;
+    if (ctx.qaIndex <= 0) return;
+    stashCurrentAnswer();
+    ctx.qaIndex--;
+    renderQaCurrent();
+  }
+  // 全部答完：暂存末题 → 收集答案 → 进入结果
+  async function finishQa() {
+    const ctx = state.optCtx;
+    stashCurrentAnswer();
+    const qa = ctx.answers.slice();
     ctx.answers = qa;
     await gotoResultPhase(ctx, qa);
   }
@@ -1678,7 +1799,15 @@
     $('#opt-result').disabled = true;
     ov.classList.add('loading');
     $('#opt-apply').disabled = true;
-    setOptStatus('info', '正在优化，请稍候…');
+    const STEPS = [
+      { label: '整理原文与补充细节' },
+      { label: '调用模型优化' },    // 联网，最慢
+      { label: '生成结果' }
+    ];
+    renderOptSteps(STEPS, 0);
+    // 步骤1：整理（轻量）
+    await tick();
+    renderOptSteps(STEPS, 1);
     let res;
     try {
       res = await PH.llm.chatForOptimize({
@@ -1687,19 +1816,21 @@
         content: ctx.content, sliderPos: ctx.sliderPos, qa
       });
     } catch (e) {
-      res = { ok: false, error: '请求异常：' + (e && e.message || e) };
+      res = { ok: false, error: friendlyError((e && e.message) || e) };
     }
     ov.classList.remove('loading');
     if (res.ok) {
+      renderOptSteps(STEPS, 2);
       $('#opt-result').value = res.text;
       $('#opt-result').disabled = false;
       $('#opt-apply').disabled = false;
-      setOptStatus('', '');
+      clearOptSteps();
+      clearRetry();
     } else {
       $('#opt-result').value = '';
       $('#opt-result').disabled = true;
-      $('#opt-apply').disabled = true;
-      setOptStatus('error', res.error || '优化失败，请重试');
+      renderOptSteps(STEPS, 1, 1, res.error || '优化失败，请重试');
+      enableRetry('result');
     }
   }
 
@@ -1922,13 +2053,18 @@
   $('#opt-prompt').addEventListener('click', runOptimize);
   $('#opt-close').addEventListener('click', closeOptOverlay);
   $('#opt-cancel').addEventListener('click', closeOptOverlay);
-  // 主按钮按阶段分发：setup→开始优化 / qa→确认提交 / result→应用
+  // 主按钮按阶段分发：setup→开始优化 / qa→下一轮(末轮生成结果) / result→应用
+  // 出错重试态优先：qa→重新生成问题 / result→重新调用模型优化
   $('#opt-apply').addEventListener('click', () => {
     const p = state.optPhase;
+    if (state.optRetry === 'qa') { clearRetry(); gotoQAPhase(state.optCtx); return; }
+    if (state.optRetry === 'result') { clearRetry(); gotoResultPhase(state.optCtx, (state.optCtx.answers || []).slice()); return; }
     if (p === 'setup') startOptimize();
-    else if (p === 'qa') submitQa();
+    else if (p === 'qa') nextQa();
     else applyOptimized();
   });
+  // 问答翻页：上一轮
+  $('#opt-qa-prev').addEventListener('click', prevQa);
   // 滑块实时刷新语义标签
   $('#opt-slider').addEventListener('input', refreshSliderLabels);
   $('#opt-overlay').addEventListener('click', (e) => { if (e.target === $('#opt-overlay')) closeOptOverlay(); });

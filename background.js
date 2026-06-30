@@ -78,12 +78,30 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
+// ---------- service worker 保活 ----------
+// LLM 请求（尤其 reasoning 模型的高档咨询）可能耗时数十秒，
+// MV3 service worker 空闲约 30 秒会被 Chrome 回收，导致进行中的 fetch 中断报 "Failed to fetch"。
+// 故在请求期间用 chrome.alarms 周期性唤醒 worker，请求结束即停止。
+const KEEPALIVE_ALARM = 'ph-keepalive';
+let keepaliveCount = 0; // 并发请求数，归零时才停止保活
+function startKeepalive() {
+  keepaliveCount++;
+  chrome.alarms.create(KEEPALIVE_ALARM, { periodInMinutes: 0.45 }); // ~27秒，小于30秒回收窗口
+}
+function stopKeepalive() {
+  keepaliveCount = Math.max(0, keepaliveCount - 1);
+  if (keepaliveCount === 0) chrome.alarms.clear(KEEPALIVE_ALARM);
+}
+// alarms 触发时无需做事，其本身即让 worker 续命
+chrome.alarms.onAlarm.addListener(() => { /* keepalive tick */ });
+
 // 通用 HTTP：按请求规格执行 fetch 并返回 JSON
 async function llmFetch(spec) {
   if (!spec || !spec.url) return { ok: false, error: '缺少 url' };
   const opt = { method: spec.method || 'GET' };
   if (spec.headers) opt.headers = spec.headers;
   if (spec.body != null) opt.body = typeof spec.body === 'string' ? spec.body : JSON.stringify(spec.body);
+  startKeepalive();
   try {
     const res = await fetch(spec.url, opt);
     const text = await res.text();
@@ -92,6 +110,8 @@ async function llmFetch(spec) {
     return { ok: res.ok, status: res.status, data };
   } catch (e) {
     return { ok: false, error: String((e && e.message) || e) };
+  } finally {
+    stopKeepalive();
   }
 }
 
