@@ -525,7 +525,8 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 .bd-item.checked { background: var(--primary-soft); border-color: var(--primary); }
 .bd-cb { position: absolute; top: 10px; right: 10px; accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; margin: 0; }
 /* 底部操作区 */
-.bd-foot { flex-shrink: 0; padding: 12px 14px; border-top: 1px solid var(--border); }
+.bd-foot { flex-shrink: 0; padding: 12px 14px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+.bd-foot .btn.block { flex: 1; }   /* 导出/删除两按钮等宽并排 */
 .bd-foot .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
 
 
@@ -599,6 +600,20 @@ button .ic, .chip .ic, .link-btn .ic, .tab .ic, .mini-btn .ic { margin-right: 3p
 .confirm-msg { font-size: 13.5px; color: var(--text-soft); line-height: 1.6; white-space: pre-line; }
 #prompt-overlay .confirm-msg { margin-bottom: 12px; }
 .import-info { font-size: 13px; color: var(--text-soft); margin-bottom: 12px; }
+/* 导出选项弹窗 */
+.export-info { font-size: 13px; color: var(--text-soft); margin-bottom: 8px; }
+.export-opt { display: flex; align-items: center; gap: 8px; padding: 7px 0; font-size: 13px; color: var(--text); cursor: pointer; user-select: none; }
+.export-opt input { accent-color: var(--primary); width: 15px; height: 15px; cursor: pointer; }
+.export-opt:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
+.export-warn { font-size: 12px; color: var(--danger); margin-top: 6px; line-height: 1.4; }
+.export-encrypt { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.export-encrypt-label { font-size: 12.5px; color: var(--text-soft); margin-bottom: 2px; }
+.export-passwd {
+  width: 100%; box-sizing: border-box; margin-top: 8px;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg); color: var(--text); font-size: 13px;
+}
+.export-passwd:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
 
 .var-field { margin-bottom: 12px; }
 .var-field label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
@@ -805,6 +820,13 @@ mark { background: var(--accent); color: #1a1a1a; border-radius: 2px; padding: 0
 
 /* 咨询问答 */
 .opt-qa-intro { font-size: 12px; color: var(--text-soft); margin-bottom: 6px; }
+/* 补充细节页文本框 */
+.opt-supplement textarea {
+  width: 100%; box-sizing: border-box; resize: vertical; min-height: 120px;
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.6;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text);
+}
+.opt-supplement textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
 .opt-qa-progress { font-size: 11.5px; color: var(--text-faint); text-align: center; margin-bottom: 10px; }
 .opt-q { border: 1px solid var(--border); border-radius: 9px; padding: 10px; margin-bottom: 10px; background: var(--bg-soft); }
 .opt-q:last-child { margin-bottom: 0; }

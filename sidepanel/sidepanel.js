@@ -41,6 +41,8 @@
     // 供应商-模型管理
     catalog: [],
     activeModels: [],           // 激活的模型 id 数组
+    // 导出选项弹窗：暂存待导出 { kind:'all'|'batch', selected:[prompts]? }
+    pendingExport: null,
     // 提示词AI优化配置
     aiConfig: {},               // { proto, baseUrl, apiKey, model, levelPrompts }
     sysEditPos: 10,             // 设置页「优化指令」当前查看/编辑的档位(1-20)
@@ -882,7 +884,7 @@
     toast('显示设置已保存');
   }
 
-  // ---------- 批量删除（两级下拉筛选：分类→标签，勾选要删的提示词） ----------
+  // ---------- 批量管理（两级下拉筛选：分类→标签，勾选要导出/删除的提示词） ----------
   function openBatchSheet() {
     state.batchSelCats = {};
     state.batchSelTags = {};
@@ -1036,6 +1038,7 @@
     $('#bd-count').textContent = '匹配 ' + total + ' 条，勾选 ' + checked + ' 条';
     $('#bd-delete').textContent = '删除勾选 (' + checked + ')';
     $('#bd-delete').disabled = checked === 0;
+    $('#bd-export').textContent = '导出勾选 (' + checked + ')';
   }
   // 全选/全不选当前匹配集
   function batchSelectAll(on) {
@@ -1063,6 +1066,15 @@
     closeBatchSheet();
     updateTrashCount();
     toast('已移到回收站 ' + ids.length + ' 条');
+  }
+
+  // 批量导出：仅导出勾选的提示词（结构与全量备份一致，可直接导入合并）
+  // 批量导出：校验有勾选 → 打开导出选项弹窗（弹窗内决定是否含设置/key）
+  function doBatchExport() {
+    const list = getBatchFiltered();
+    const selected = list.filter((p) => state.batchChecked[p.id]);
+    if (!selected.length) { toast('没有勾选任何提示词'); return; }
+    openExportDialog('batch', selected);
   }
 
   // ---------- 回收站（软删除提示词：还原 / 永久删除 / 悬浮预览） ----------
@@ -1569,7 +1581,7 @@
 
   // 本次优化会话上下文
   function freshOptCtx(content) {
-    return { content, sliderPos: 10, questions: [], answers: [], qaIndex: 0 };
+    return { content, sliderPos: 10, questions: [], answers: [], qaIndex: 0, supplement: '' };
   }
 
   // 切换阶段：setup / qa / result
@@ -1577,13 +1589,15 @@
     state.optPhase = p;
     $('#opt-setup').hidden = p !== 'setup';
     $('#opt-qa').hidden = p !== 'qa';
+    $('#opt-supplement').hidden = p !== 'supplement';
     $('#opt-result-phase').hidden = p !== 'result';
     const apply = $('#opt-apply');
     if (p === 'setup') apply.textContent = '开始优化';
     else if (p === 'result') apply.textContent = '应用';
-    // qa 阶段的主按钮文案由 updateQaNav 按当前轮次动态控制
+    // qa / supplement 阶段的主按钮文案由各自流程控制
     // 标题
-    $('#opt-title').textContent = (p === 'qa') ? '提示词优化 · 补充细节'
+    $('#opt-title').textContent = (p === 'qa') ? '提示词优化 · 咨询问题'
+      : (p === 'supplement') ? '提示词优化 · 补充细节'
       : (p === 'result') ? '提示词优化 · 结果' : '提示词优化';
   }
 
@@ -1781,13 +1795,21 @@
     ctx.qaIndex--;
     renderQaCurrent();
   }
-  // 全部答完：暂存末题 → 收集答案 → 进入结果
-  async function finishQa() {
+  // 全部答完：暂存末题 → 进入补充细节页（可留空）
+  function finishQa() {
     const ctx = state.optCtx;
     stashCurrentAnswer();
-    const qa = ctx.answers.slice();
-    ctx.answers = qa;
-    await gotoResultPhase(ctx, qa);
+    ctx.answers = ctx.answers.slice();
+    setOptPhase('supplement');
+    $('#opt-supplement-text').value = ctx.supplement || ''; // 保留已填（重试场景）
+    $('#opt-apply').textContent = '开始优化';
+    $('#opt-apply').disabled = false;
+  }
+  // 补充页 → 结果：读取补充文本存 ctx → 调用模型优化
+  async function submitSupplement() {
+    const ctx = state.optCtx;
+    ctx.supplement = ($('#opt-supplement-text').value || '').trim();
+    await gotoResultPhase(ctx, ctx.answers.slice());
   }
 
   // 进入结果阶段：调用模型生成优化结果
@@ -1813,7 +1835,7 @@
       res = await PH.llm.chatForOptimize({
         proto: c.proto, baseUrl: c.baseUrl, apiKey: c.apiKey, model: c.model,
         system: effectiveLevelPrompt(ctx.sliderPos),
-        content: ctx.content, sliderPos: ctx.sliderPos, qa
+        content: ctx.content, sliderPos: ctx.sliderPos, qa, supplement: ctx.supplement
       });
     } catch (e) {
       res = { ok: false, error: friendlyError((e && e.message) || e) };
@@ -1858,26 +1880,189 @@
 
 
   // ---------- 导入导出 ----------
-  async function doExport() {
-    const data = await store.exportAll();
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  function doExport() {
+    openExportDialog('all');
+  }
+  // 打开导出选项弹窗。kind='all'(全量) | 'batch'(勾选的，selected 为提示词数组)
+  function openExportDialog(kind, selected) {
+    state.pendingExport = { kind, selected: selected || null };
+    $('#export-scope').textContent = (kind === 'batch' && selected)
+      ? '勾选的 ' + selected.length + ' 条提示词'
+      : '全部数据';
+    $('#export-include-settings').checked = true;   // 设置默认勾
+    $('#export-include-key').checked = false;        // key 默认不勾（安全默认）
+    const noneRadio = document.querySelector('input[name="export-encrypt"][value="none"]');
+    if (noneRadio) noneRadio.checked = true;        // 加密默认「不加密」
+    $('#export-passwd').value = '';                  // 清空自定义密钥
+    updateExportDialogUI();
+    $('#export-overlay').hidden = false;
+  }
+  function closeExportDialog() {
+    $('#export-overlay').hidden = true;
+    state.pendingExport = null;
+  }
+  // 弹窗内联动：不勾「含设置」→「含key」禁用；base 空 → warn；自定义密钥→显示密码框
+  function updateExportDialogUI() {
+    const incSet = $('#export-include-settings').checked;
+    const incKey = $('#export-include-key');
+    incKey.disabled = !incSet;
+    if (!incSet) incKey.checked = false;
+    const c = state.aiConfig || {};
+    const warn = $('#export-warn');
+    if (incKey.checked && !c.baseUrl) {
+      warn.hidden = false;
+      warn.textContent = '未配置 Base URL，无法加密，本次将不导出 API Key。';
+    } else {
+      warn.hidden = true;
+      warn.textContent = '';
+    }
+    // 文件加密：选「自定义」时显示密码框
+    const enc = document.querySelector('input[name="export-encrypt"]:checked');
+    $('#export-passwd').hidden = !(enc && enc.value === 'custom');
+  }
+  // 确认导出：按勾选项构造数据并下载
+  async function confirmExport() {
+    const pe = state.pendingExport;
+    if (!pe) return;
+    const incSet = $('#export-include-settings').checked;
+    const incKey = $('#export-include-key').checked && incSet;
+    const c = state.aiConfig || {};
+    // base 空但勾了 key → 跳过 key（已在 UI warn）
+    const useKey = incKey && !!c.baseUrl && !!c.apiKey;
+    let settings = undefined;
+    if (incSet) {
+      settings = await store.getSettings();
+      // 把 aiConfig 挂进 settings（aiConfig 单独存储在 ph_ai_config，不在 getSettings 返回里）
+      const ai = Object.assign({}, c);
+      if (useKey) {
+        ai.apiKey = await PH.crypto.encryptApiKey(c.apiKey, c.baseUrl); // 加密；失败返回 null
+      } else {
+        ai.apiKey = '';  // 不导出 key → 置空
+      }
+      settings.aiConfig = ai;
+    }
+    // 构造数据
+    let data, fname;
+    if (pe.kind === 'batch' && pe.selected) {
+      const selected = pe.selected;
+      const allCats = await store.getCategories();
+      const usedCatIds = new Set(selected.map((p) => p.categoryId).filter(Boolean));
+      data = {
+        version: 2, exportedAt: new Date().toISOString(),
+        prompts: selected,
+        categories: allCats.filter((cat) => usedCatIds.has(cat.id))
+      };
+      fname = 'promptfarm-export-' + selected.length + '-' + new Date().toISOString().slice(0, 10) + '.json';
+    } else {
+      const exported = await store.exportAll(); // 全量（含 prompts/categories/settings）
+      data = { version: exported.version, exportedAt: exported.exportedAt, prompts: exported.prompts, categories: exported.categories };
+      fname = 'promptfarm-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    }
+    if (settings) data.settings = settings;
+    // 嵌入文件防伪标识
+    data._pf_marker = await PH.crypto.makeFileMarker();
+    // 文件加密选项
+    const encRadio = document.querySelector('input[name="export-encrypt"]:checked');
+    const enc = encRadio ? encRadio.value : 'none';
+    let pass = '';
+    if (enc === 'custom') {
+      pass = $('#export-passwd').value;
+      if (!pass) { toast('请填写自定义密钥'); return; }
+    } else if (enc === 'fixed') {
+      pass = 'promptfarm';
+    }
+    const jsonStr = JSON.stringify(data, null, 2);
+    let content;
+    if (enc === 'none') {
+      content = jsonStr;                  // 不加密：明文 JSON
+    } else {
+      content = await PH.crypto.encryptData(jsonStr, pass);  // 加密：base64
+    }
+    // 下载 .pf 文件
+    const blob = new Blob([content], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'promptfarm-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.href = url; a.download = fname.replace(/\.json$/, '.pf');
     a.click(); URL.revokeObjectURL(url);
-    toast('已导出备份');
+    closeExportDialog();
+    const n = data.prompts.length;
+    const parts = ['已导出 ' + n + ' 条'];
+    if (incSet) parts.push(incKey ? '（含设置与加密 Key）' : '（含设置）');
+    if (enc !== 'none') parts.push(enc === 'custom' ? '（文件已加密）' : '（固定密钥加密）');
+    toast(parts.join(''));
   }
   function handleImportFile(file) {
     const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = JSON.parse(e.target.result);
-        state.pendingImport = data;
-        $('#import-count').textContent = (data.prompts || []).length;
-        $('#import-overlay').hidden = false;
-      } catch (err) { toast('文件解析失败：' + err.message); }
+    reader.onload = async (e) => {
+      const raw = e.target.result;
+      const parsed = await tryDecryptImport(raw); // {ok, data, error}
+      if (!parsed.ok) { toast(parsed.error || '文件无法读取'); return; }
+      state.pendingImport = parsed.data;
+      $('#import-count').textContent = (parsed.data.prompts || []).length;
+      $('#import-overlay').hidden = false;
     };
     reader.readAsText(file);
+  }
+  // 导入解密链：明文试读 → 固定密钥 → 弹窗问用户 → 都失败报错。返回 {ok, data?, error?}
+  async function tryDecryptImport(raw) {
+    const C = PH.crypto;
+    // 1) 先试明文 JSON
+    let plainObj = null, plainParsed = false, plainNoMarker = false;
+    try {
+      plainObj = JSON.parse(raw);
+      plainParsed = true;
+      if (await C.checkFileMarker(plainObj._pf_marker)) return { ok: true, data: plainObj };
+      plainNoMarker = true; // 是合法 JSON 但无标识（旧版/伪造）
+    } catch (_) { /* 不是明文 JSON，继续当加密文件 */ }
+    // 2) 用固定密钥 promptfarm 试解
+    if (!plainParsed) {
+      const dec = await C.decryptData(raw, 'promptfarm');
+      if (dec) {
+        try {
+          const obj = JSON.parse(dec);
+          if (await C.checkFileMarker(obj._pf_marker)) return { ok: true, data: obj };
+        } catch (_) {}
+      }
+    }
+    // 3) 明文 JSON 但无标识 → 友好提示（旧版备份）
+    if (plainNoMarker) {
+      return { ok: false, error: '该文件缺少 PromptFarm 安全标识，可能是旧版备份，无法导入。请用新版本重新导出。' };
+    }
+    // 4) 弹窗让用户输入密钥（循环直到解出/取消）
+    while (true) {
+      const pass = await askImportPasswd();
+      if (pass === null) return { ok: false, error: '已取消解密' }; // 用户取消
+      const dec = await C.decryptData(raw, pass);
+      if (dec) {
+        try {
+          const obj = JSON.parse(dec);
+          if (await C.checkFileMarker(obj._pf_marker)) return { ok: true, data: obj };
+        } catch (_) {}
+      }
+      // 该密钥仍失败 → 提示并可重试
+      askImportPasswdWarn('密钥错误或文件已损坏，请重试');
+    }
+  }
+  // 导入密钥弹窗（Promise 模式）：返回用户输入的密钥，取消返回 null
+  let _importPasswdResolve = null;
+  function askImportPasswd() {
+    return new Promise((resolve) => {
+      $('#import-passwd-input').value = '';
+      $('#import-passwd-warn').hidden = true;
+      $('#import-passwd-warn').textContent = '';
+      $('#import-passwd-overlay').hidden = false;
+      _importPasswdResolve = resolve;
+      setTimeout(() => $('#import-passwd-input').focus(), 50);
+    });
+  }
+  // 在已打开的密钥弹窗里显示错误（解密失败时让用户重试）
+  function askImportPasswdWarn(msg) {
+    const w = $('#import-passwd-warn');
+    w.hidden = false; w.textContent = msg;
+  }
+  function closeImportPasswd(resolveNull) {
+    $('#import-passwd-overlay').hidden = true;
+    if (_importPasswdResolve) { const r = _importPasswdResolve; _importPasswdResolve = null; r(resolveNull ? null : $('#import-passwd-input').value); }
   }
   async function confirmImport() {
     if (!state.pendingImport) return;
@@ -2061,6 +2246,7 @@
     if (state.optRetry === 'result') { clearRetry(); gotoResultPhase(state.optCtx, (state.optCtx.answers || []).slice()); return; }
     if (p === 'setup') startOptimize();
     else if (p === 'qa') nextQa();
+    else if (p === 'supplement') submitSupplement();
     else applyOptimized();
   });
   // 问答翻页：上一轮
@@ -2069,7 +2255,7 @@
   $('#opt-slider').addEventListener('input', refreshSliderLabels);
   $('#opt-overlay').addEventListener('click', (e) => { if (e.target === $('#opt-overlay')) closeOptOverlay(); });
 
-  // 批量删除面板
+  // 批量管理面板
   $('#btn-batch').addEventListener('click', openBatchSheet);
   $('#batch-back').addEventListener('click', closeBatchSheet);
   // 下拉框：触发器开关
@@ -2109,6 +2295,7 @@
   $('#bd-select-all').addEventListener('click', () => batchSelectAll(true));
   $('#bd-select-none').addEventListener('click', () => batchSelectAll(false));
   $('#bd-delete').addEventListener('click', doBatchDelete);
+  $('#bd-export').addEventListener('click', doBatchExport);
 
   // 导入导出
   $('#btn-export').addEventListener('click', doExport);
@@ -2117,6 +2304,22 @@
   $('#import-cancel').addEventListener('click', () => { $('#import-overlay').hidden = true; state.pendingImport = null; });
   $('#import-close').addEventListener('click', () => { $('#import-overlay').hidden = true; state.pendingImport = null; });
   $('#import-confirm').addEventListener('click', confirmImport);
+  // 导入密钥弹窗：确认→提交密钥，取消/关闭→返回 null
+  $('#import-passwd-confirm').addEventListener('click', () => closeImportPasswd(false));
+  $('#import-passwd-cancel').addEventListener('click', () => closeImportPasswd(true));
+  $('#import-passwd-close').addEventListener('click', () => closeImportPasswd(true));
+  $('#import-passwd-overlay').addEventListener('click', (e) => { if (e.target === $('#import-passwd-overlay')) closeImportPasswd(true); });
+  $('#import-passwd-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); closeImportPasswd(false); } });
+
+  // 导出选项弹窗
+  $('#export-confirm').addEventListener('click', confirmExport);
+  $('#export-cancel').addEventListener('click', closeExportDialog);
+  $('#export-close').addEventListener('click', closeExportDialog);
+  $('#export-overlay').addEventListener('click', (e) => { if (e.target === $('#export-overlay')) closeExportDialog(); });
+  $('#export-include-settings').addEventListener('change', updateExportDialogUI);
+  $('#export-include-key').addEventListener('change', updateExportDialogUI);
+  // 文件加密单选联动（选「自定义」显示密码框）
+  document.querySelectorAll('input[name="export-encrypt"]').forEach((r) => r.addEventListener('change', updateExportDialogUI));
 
   // 回收站
   $('#btn-trash').addEventListener('click', openTrashSheet);
@@ -2166,7 +2369,9 @@
       if (!$('#modal-overlay').hidden) { closeVariableModal(); return; }
       if (!$('#cat-overlay').hidden) { $('#cat-overlay').hidden = true; return; }
       if (!$('#ai-sheet').hidden) { closeAISheet(); return; }
-      if (!$('#import-overlay').hidden) { $('#import-overlay').hidden = true; return; }
+      if (!$('#import-overlay').hidden) { $('#import-overlay').hidden = true; state.pendingImport = null; return; }
+      if (!$('#export-overlay').hidden) { closeExportDialog(); return; }
+      if (!$('#import-passwd-overlay').hidden) { closeImportPasswd(true); return; }
     }
     // 列表键盘导航
     if ($('#detail-sheet').hidden && $('#catm-sheet').hidden && $('#tagm-sheet').hidden && $('#settings-sheet').hidden && $('#batch-sheet').hidden && $('#trash-sheet').hidden && $('#mm-sheet').hidden) {

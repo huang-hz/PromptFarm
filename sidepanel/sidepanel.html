@@ -18,7 +18,7 @@
         <span class="title">PromptFarm</span>
       </div>
       <div class="top-actions">
-        <button id="btn-batch" class="icon-btn" title="按分类/标签删除提示词" aria-label="批量删除">
+        <button id="btn-batch" class="icon-btn" title="按分类/标签管理提示词" aria-label="批量管理">
           <svg class="ic"><use href="#ic-batch"/></svg>
         </button>
         <button id="btn-settings" class="icon-btn" title="设置" aria-label="设置">
@@ -54,7 +54,7 @@
           <button class="link-btn" id="btn-export"><svg class="ic"><use href="#ic-export"/></svg> 导出</button>
           <button class="link-btn" id="btn-import"><svg class="ic"><use href="#ic-import"/></svg> 导入</button>
           <button class="link-btn" id="btn-trash"><svg class="ic"><use href="#ic-trash"/></svg> 回收站<span class="trash-count" id="trash-count" hidden>0</span></button>
-          <input type="file" id="import-file" accept=".json" hidden />
+          <input type="file" id="import-file" accept=".pf" hidden />
         </span>
       </footer>
     </section>
@@ -194,11 +194,11 @@
       </div>
     </div>
 
-    <!-- ========== 批量删除面板（按分类+标签筛选，勾选要删除的提示词） ========== -->
+    <!-- ========== 批量管理面板（按分类+标签筛选，勾选要导出/删除的提示词） ========== -->
     <div class="sheet" id="batch-sheet" hidden>
       <div class="sheet-head">
         <button class="icon-btn" id="batch-back" title="返回" aria-label="返回"><svg class="ic"><use href="#ic-back"/></svg></button>
-        <span class="sheet-title" id="batch-title">批量删除</span>
+        <span class="sheet-title" id="batch-title">批量管理</span>
       </div>
       <div class="sheet-body" id="batch-body">
         <!-- 筛选区：两级下拉（一级分类 → 二级标签），复用 .mp-dropdown/.mp-company 视觉 -->
@@ -223,6 +223,7 @@
         <div id="bd-list"></div>
       </div>
       <div class="bd-foot">
+        <button class="btn block" id="bd-export">导出勾选 (0)</button>
         <button class="btn danger block" id="bd-delete">删除勾选 (0)</button>
       </div>
     </div>
@@ -367,6 +368,12 @@
             <div id="opt-qa-list"></div>
           </div>
 
+          <!-- 阶段2.5：补充细节（仅详细度≥8 问答后出现，可留空） -->
+          <div class="opt-phase opt-supplement" id="opt-supplement" hidden>
+            <div class="opt-qa-intro">还有其他想补充的细节吗？可留空直接开始优化：</div>
+            <textarea id="opt-supplement-text" rows="6" placeholder="例如：目标读者、语气偏好、必须包含的约束、字数要求……"></textarea>
+          </div>
+
           <!-- 阶段3：结果 -->
           <div class="opt-phase opt-result" id="opt-result-phase" hidden>
             <div class="field">
@@ -456,6 +463,46 @@
       </div>
     </div>
 
+    <!-- ========== 导出选项弹层（咨询是否含设置/Key） ========== -->
+    <div class="modal-overlay" id="export-overlay" hidden>
+      <div class="modal small">
+        <div class="modal-head"><span>导出选项</span><button class="icon-btn" id="export-close" aria-label="关闭"><svg class="ic"><use href="#ic-close"/></svg></button></div>
+        <div class="modal-body">
+          <p class="export-info">将导出 <b id="export-scope">全部数据</b>。</p>
+          <label class="export-opt"><input type="checkbox" id="export-include-settings" checked> 包含设置（主题、展示数量等）</label>
+          <label class="export-opt"><input type="checkbox" id="export-include-key"> 包含 API Key（用 Base URL 派生密钥加密）</label>
+          <p class="export-warn" id="export-warn" hidden></p>
+          <div class="export-encrypt">
+            <div class="export-encrypt-label">文件加密</div>
+            <label class="export-opt"><input type="radio" name="export-encrypt" value="none" checked> 不加密</label>
+            <label class="export-opt"><input type="radio" name="export-encrypt" value="fixed"> 固定密钥（promptfarm）</label>
+            <label class="export-opt"><input type="radio" name="export-encrypt" value="custom"> 自定义密钥</label>
+            <input type="password" id="export-passwd" class="export-passwd" placeholder="自定义密钥（选「自定义」时填写）" hidden autocomplete="off" />
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn ghost" id="export-cancel">取消</button>
+          <button class="btn primary" id="export-confirm">导出</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 导入密钥弹层（加密文件需用户输入密钥） ========== -->
+    <div class="modal-overlay" id="import-passwd-overlay" hidden>
+      <div class="modal small">
+        <div class="modal-head"><span>输入解密密钥</span><button class="icon-btn" id="import-passwd-close" aria-label="关闭"><svg class="ic"><use href="#ic-close"/></svg></button></div>
+        <div class="modal-body">
+          <p class="export-info">该文件已加密，请输入导出时设置的密钥：</p>
+          <input type="password" id="import-passwd-input" class="export-passwd" placeholder="解密密钥" autocomplete="off" />
+          <p class="export-warn" id="import-passwd-warn" hidden></p>
+        </div>
+        <div class="modal-actions">
+          <button class="btn ghost" id="import-passwd-cancel">取消</button>
+          <button class="btn primary" id="import-passwd-confirm">解密</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ========== 变量填充弹层（使用时） ========== -->
     <div class="modal-overlay" id="modal-overlay" hidden>
       <div class="modal" role="dialog" aria-modal="true">
@@ -480,6 +527,7 @@
   <script src="../lib/template.js"></script>
   <script src="../lib/models.js"></script>
   <script src="../lib/store.js"></script>
+  <script src="../lib/crypto.js"></script>
   <script src="../lib/llm.js"></script>
   <script src="../seed/seed-data.js"></script>
   <script src="sidepanel.js"></script>

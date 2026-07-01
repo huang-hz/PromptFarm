@@ -4,10 +4,13 @@
 
 # PromptFarm
 
-**A local-first prompt manager that lives in your browser sidebar.**<br>
-**本地优先的提示词管理扩展，常驻浏览器侧边栏。**
+**Sow a prompt, watch it grow, harvest better prompts.**<br>
+*播种一条提示词，看它生长，收获更优的提示词。*
 
-<a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a><a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.1.0-blue.svg" alt="Version"></a><a href="#安装"><img src="https://img.shields.io/badge/platform-Chrome%20%7C%20Edge%20%7C%20Chromium-4285F4.svg" alt="Platform"></a><a href="https://developer.chrome.com/docs/extensions/mv3/intro/"><img src="https://img.shields.io/badge/Manifest-V3-34A853.svg" alt="Manifest"></a><a href="#项目结构"><img src="https://img.shields.io/badge/build-none-FBBC05.svg" alt="No Build"></a><a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-ff69b4.svg" alt="PRs Welcome"></a>
+*A local-first prompt manager that lives in your browser sidebar.*<br>
+*本地优先的提示词管理器，常驻浏览器侧边栏。*
+
+<a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a><a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.1.1-blue.svg" alt="Version"></a><a href="#安装"><img src="https://img.shields.io/badge/platform-Chrome%20%7C%20Edge%20%7C%20Chromium-4285F4.svg" alt="Platform"></a><a href="https://developer.chrome.com/docs/extensions/mv3/intro/"><img src="https://img.shields.io/badge/Manifest-V3-34A853.svg" alt="Manifest"></a><a href="#项目结构"><img src="https://img.shields.io/badge/build-none-FBBC05.svg" alt="No Build"></a><a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-ff69b4.svg" alt="PRs Welcome"></a>
 
 *No backend · No build step · No default remote service · Your prompts never leave your device unless you opt in.*<br>
 *无后端 · 无构建 · 无默认远程服务 · 除非你主动开启 AI 优化，提示词永不离开本地*
@@ -18,7 +21,7 @@
 
 ## ✨ 它能做什么 / What it does
 
-PromptFarm 是一个纯前端的 Chrome / Edge（及其他 Chromium 内核）侧边栏扩展，用来**收集、组织、检索和复用**你常用的 LLM 提示词。所有数据存在 `chrome.storage.local`，不依赖任何服务器。
+PromptFarm 是一个纯前端的 Chrome / Edge（及其他 Chromium 内核）侧边栏扩展，用来**收集、组织、检索和复用**你常用的 LLM 提示词。所有数据存在本地，不依赖任何服务器。
 
 A pure front-end sidebar extension for collecting, organizing, searching and reusing LLM prompts. Everything is stored locally — no server required.
 
@@ -62,7 +65,7 @@ A pure front-end sidebar extension for collecting, organizing, searching and reu
 </div>
 
 - **左半（创意度）**：模型会在保留原目标的前提下，**主动虚构**人物、时间、地点、情境等场景信息，把干瘪的需求点燃成鲜活的画面。越靠左，虚构越多。
-- **右半（详细度）**：模型**绝不虚构**任何原文没有的信息，只做结构化、补充约束、整理格式。越靠右越详尽。
+- **右半（详细度）**：模型**不虚构**任何原文没有的信息，只做结构化、补充约束、整理格式。越靠右越详尽。
 - **详细度 ≥ 8（pos 18–20）**：进入**咨询流程** —— 模型先按档位生成 1–7 个澄清问题，你逐轮作答（可跳过、可回退），再据此生成贴合你真实需求的优化结果。
 
 > 🎚️ **每档优化指令都可自定义**：设置 → 提示词AI优化 → 拖动 20 档滑块，可逐档查看、编辑、重置内置指令，互不影响。
