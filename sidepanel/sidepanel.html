@@ -295,12 +295,15 @@
               <button type="button" class="btn-mini" id="ai-sys-default" title="将该档重置为内置默认">重置</button>
             </div>
           </div>
-          <div class="ai-sys-slider-wrap">
+          <div class="ai-sys-slider-wrap" id="ai-sys-slider-row">
             <div class="opt-slider-ends">
-              <span>← 创意·虚构</span>
-              <span>详细·咨询 →</span>
+              <span class="opt-end-left">← 创意·虚构</span>
+              <span class="opt-end-right">详细·咨询 →</span>
             </div>
-            <input type="range" class="setting-range" id="ai-sys-slider" min="1" max="20" value="10" />
+            <div class="opt-slider-wrap">
+              <input type="range" class="setting-range" id="ai-sys-slider" min="1" max="20" value="10" />
+              <div class="opt-ticks" id="ai-sys-ticks" aria-hidden="true"></div>
+            </div>
             <div class="hint" id="ai-sys-slider-label" style="margin-top:4px;text-align:center"></div>
           </div>
           <textarea id="ai-system" rows="8" readonly></textarea>
@@ -351,13 +354,17 @@
 
           <!-- 阶段1：选档（单滑块 20 档：左创意虚构 ↔ 右详细咨询）-->
           <div class="opt-phase opt-setup" id="opt-setup">
-            <div class="opt-slider-row">
+            <div class="opt-slider-row" id="opt-slider-row">
               <div class="opt-slider-ends">
                 <span class="opt-end-left">← 创意·虚构</span>
                 <span class="opt-end-right">详细·咨询 →</span>
               </div>
-              <input type="range" class="setting-range opt-slider" id="opt-slider" min="1" max="20" value="10" />
+              <div class="opt-slider-wrap">
+                <input type="range" class="setting-range opt-slider" id="opt-slider" min="1" max="20" value="10" />
+                <div class="opt-ticks" id="opt-ticks" aria-hidden="true"></div>
+              </div>
               <div class="opt-slider-label" id="opt-slider-label">创意度 1/10 · 极轻微虚构</div>
+              <div class="opt-slider-desc" id="opt-slider-desc"></div>
             </div>
           </div>
 

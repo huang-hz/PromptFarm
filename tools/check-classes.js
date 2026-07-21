@@ -1,0 +1,13 @@
+const fs = require('fs');
+const css = fs.readFileSync('sidepanel/sidepanel.css', 'utf8');
+const html = fs.readFileSync('sidepanel/sidepanel.html', 'utf8');
+const js = fs.readFileSync('sidepanel/sidepanel.js', 'utf8');
+const classes = new Set();
+const add = (s) => s.split(/\s+/).forEach((c) => c && classes.add(c));
+for (const m of html.matchAll(/class="([^"]+)"/g)) add(m[1]);
+for (const m of js.matchAll(/class=\\?"([^"\\]+)\\?"/g)) add(m[1]);
+for (const m of js.matchAll(/className\s*=\s*'([^']+)'/g)) add(m[1]);
+for (const m of js.matchAll(/classList\.(?:add|toggle|remove)\('([^']+)'/g)) add(m[1]);
+const missing = [...classes].filter((c) => !/^[<{]/.test(c) && !css.includes('.' + c));
+console.log('total classes:', classes.size);
+console.log('missing in CSS:', missing);

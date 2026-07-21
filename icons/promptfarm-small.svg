@@ -10,14 +10,11 @@
     </linearGradient>
   </defs>
   <rect x="6" y="6" width="116" height="116" rx="27" fill="url(#tile)"/>
-  <!-- 嫩芽：麦黄双叶 + 白色茎 -->
-  <path d="M64 58 V38" stroke="#ffffff" stroke-width="7" stroke-linecap="round" fill="none"/>
-  <path d="M64 40 C66 26 78 16 94 16 C96 32 84 42 66 42 Z" fill="url(#leaf)"/>
-  <path d="M63 44 C61 34 52 27 40 27 C39 39 49 47 63 46 Z" fill="url(#leaf)"/>
-  <!-- 输入框 -->
+  <g transform="translate(64 42) scale(1.14) translate(-64 -42)">
+    <path d="M64 58 V38" stroke="#ffffff" stroke-width="8" stroke-linecap="round" fill="none"/>
+    <path d="M64 40 C66 26 78 16 94 16 C96 32 84 42 66 42 Z" fill="url(#leaf)"/>
+    <path d="M63 44 C61 34 52 27 40 27 C39 39 49 47 63 46 Z" fill="url(#leaf)"/>
+  </g>
   <path d="M42 58 h44 a12 12 0 0 1 12 12 v18 a12 12 0 0 1 -12 12 h-44 a12 12 0 0 1 -12 -12 v-18 a12 12 0 0 1 12 -12 z"
-        fill="none" stroke="#ffffff" stroke-width="8" stroke-linejoin="round"/>
-  <rect x="41" y="75" width="13" height="7" rx="3.5" fill="#ffffff"/>
-  <rect x="57.5" y="75" width="13" height="7" rx="3.5" fill="#ffffff"/>
-  <rect x="74" y="75" width="13" height="7" rx="3.5" fill="#ffffff"/>
+        fill="none" stroke="#ffffff" stroke-width="9.5" stroke-linejoin="round"/>
 </svg>

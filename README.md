@@ -10,7 +10,7 @@
 *A local-first prompt manager that lives in your browser sidebar.*<br>
 *本地优先的提示词管理器，常驻浏览器侧边栏。*
 
-<a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a><a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.1.1-blue.svg" alt="Version"></a><a href="#安装"><img src="https://img.shields.io/badge/platform-Chrome%20%7C%20Edge%20%7C%20Chromium-4285F4.svg" alt="Platform"></a><a href="https://developer.chrome.com/docs/extensions/mv3/intro/"><img src="https://img.shields.io/badge/Manifest-V3-34A853.svg" alt="Manifest"></a><a href="#项目结构"><img src="https://img.shields.io/badge/build-none-FBBC05.svg" alt="No Build"></a><a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-ff69b4.svg" alt="PRs Welcome"></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a><a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.2.0-blue.svg" alt="Version"></a><a href="#安装"><img src="https://img.shields.io/badge/platform-Chrome%20%7C%20Edge%20%7C%20Chromium-4285F4.svg" alt="Platform"></a><a href="https://developer.chrome.com/docs/extensions/mv3/intro/"><img src="https://img.shields.io/badge/Manifest-V3-34A853.svg" alt="Manifest"></a><a href="#项目结构"><img src="https://img.shields.io/badge/build-none-FBBC05.svg" alt="No Build"></a><a href="CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-ff69b4.svg" alt="PRs Welcome"></a>
 
 *No backend · No build step · No default remote service · Your prompts never leave your device unless you opt in.*<br>
 *无后端 · 无构建 · 无默认远程服务 · 除非你主动开启 AI 优化，提示词永不离开本地*
@@ -25,14 +25,6 @@ PromptFarm 是一个纯前端的 Chrome / Edge（及其他 Chromium 内核）侧
 
 A pure front-end sidebar extension for collecting, organizing, searching and reusing LLM prompts. Everything is stored locally — no server required.
 
-<div align="center">
-
-<img src="docs/screenshots/image.png" alt="PromptFarm 主界面" width="840">
-
-
-
-</div>
-
 ### 💡 核心亮点
 
 | | 亮点 | 说明 |
@@ -42,7 +34,7 @@ A pure front-end sidebar extension for collecting, organizing, searching and reu
 | ⚡ | **一键复用** | 复制到剪贴板，或直接插入当前网页的 `<input>` / `<textarea>` / `contenteditable`（受限页面自动降级为复制）。 |
 | 🗂️ | **分类 / 标签 / 收藏** | 分类可排序；标签按分类汇总，支持重命名、删除、手动排序；常用提示词可收藏置顶。 |
 | 🤖 | **可选的 AI 优化** | 自带 **20 档「创意 ↔ 详细」单滑块**优化，支持 OpenAI / Anthropic 兼容接口；高档详细度会**先问你几个澄清问题**，再生成优化结果。 |
-| 🌙 | **主题与无障碍** | 跟随系统 / 亮色 / 暗色；原生自定义弹层替代 `confirm`/`prompt`。 |
+| 🌙 | **主题与无障碍** | 「生长」设计语言：嫩绿 + 暖调中性色 + 麦黄点缀；跟随系统 / 亮色 / 暗色；原生自定义弹层替代 `confirm`/`prompt`。 |
 
 ---
 
@@ -94,14 +86,6 @@ A pure front-end sidebar extension for collecting, organizing, searching and reu
 
 ## 🚀 使用速览
 
-<div align="center">
-
-<img src="docs/screenshots/detail.png" alt="PromptFarm 详情页" width="420">
-
-*详情页：编辑提示词内容，自动检测 `{{变量}}` 并弹出填写表单*
-
-</div>
-
 - **搜索**：侧边栏顶部输入框，支持中文 / 英文 / 拼音 / 首字母（试试 `xy`、`xieyoujian`）。
 - **新建**：点「+ 新建」进入详情页，填写标题、内容、分类、标签。
 - **使用**：列表卡片上的按钮可直接复制 / 插入 / 收藏 / 创建副本；进入详情页可预览变量替换后的成品。
@@ -125,6 +109,7 @@ prompt-manager-extension/
 │   ├── models.js              # 本地供应商/模型目录
 │   ├── store.js               # chrome.storage.local 数据层
 │   ├── llm.js                 # OpenAI/Anthropic 兼容请求封装 + 20 档优化指令
+│   ├── crypto.js              # PBKDF2 + AES-256-GCM：API Key 与 .pf 文件加密
 │   └── pinyin/pinyin.min.js   # vendored pinyin-pro
 ├── seed/
 │   └── seed-data.js           # 首次安装示例数据
@@ -133,9 +118,11 @@ prompt-manager-extension/
 │   ├── sidepanel.css
 │   ├── sidepanel.js           # 状态机 + 手工 DOM 渲染
 │   └── icons.html             # SVG sprite
-├── icons/                     # 扩展图标
+├── icons/                     # 品牌图标（SVG 源文件 + 16/32/48/128 PNG）
 └── tools/
-    └── make-icons.js          # 图标检查工具
+    ├── make-icons.js          # 图标检查工具
+    ├── build-icons.js         # 用无头浏览器把 SVG 渲染成多尺寸 PNG
+    └── check-classes.js       # 校验 HTML/JS 中的 class 在 CSS 中均有定义
 ```
 
 ---
@@ -144,7 +131,11 @@ prompt-manager-extension/
 
 本项目**无需安装依赖、无需构建**，clone 后直接「加载已解压扩展」即可调试。修改代码后在 `chrome://extensions/` 点扩展卡片上的 🔄 刷新即生效。
 
-检查图标资源：`node tools/make-icons.js`
+界面样式集中在 `sidepanel/sidepanel.css` 的设计令牌（CSS 变量）中，支持跟随系统的自动暗色模式。
+
+- 检查图标资源：`node tools/make-icons.js`
+- 修改 `icons/*.svg` 后重新生成 PNG：`node tools/build-icons.js`（调用本机 Chrome/Edge 无头渲染）
+- 改动 UI 后校验 class 覆盖：`node tools/check-classes.js`
 
 发布前手动测试清单见 [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)。
 

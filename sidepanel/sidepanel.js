@@ -73,6 +73,10 @@
   // ---------- 初始化 ----------
   async function init() {
     await loadIcons();
+    buildTicks($('#opt-ticks'));
+    buildTicks($('#ai-sys-ticks'));
+    paintSliderRow($('#opt-slider-row'), parseInt($('#opt-slider').value, 10) || 10);
+    paintSliderRow($('#ai-sys-slider-row'), 10);
     await store.ensureInit(PH.seed);
     state.settings = await store.getSettings();
     state.categories = await store.getCategories();
@@ -312,9 +316,9 @@
     elClear.hidden = !state.query;
     if (!res.length) {
       const hasQuery = !!state.query;
-      elResults.innerHTML = '<div class="empty"><div class="emoji">' + (hasQuery ? icon('search', 'ic-xl') : icon('inbox', 'ic-xl')) + '</div>' +
-        '<div class="msg">' + (hasQuery ? '没有匹配的提示词' : '这里还没有提示词') + '</div>' +
-        '<div class="sub">' + (hasQuery ? '试试换个关键词或检查筛选条件' : '点右上角 ＋ 创建第一个') + '</div></div>';
+      elResults.innerHTML = '<div class="empty"><div class="emoji">' + (hasQuery ? icon('search', 'ic-xl') : icon('bolt', 'ic-xl')) + '</div>' +
+        '<div class="msg">' + (hasQuery ? '没有匹配的提示词' : '还没有种下任何提示词') + '</div>' +
+        '<div class="sub">' + (hasQuery ? '试试换个关键词或检查筛选条件' : '点右上角 ＋，播种第一条') + '</div></div>';
       return;
     }
     const catMap = {};
@@ -1413,6 +1417,7 @@
     // 滑块可用、显示档位语义
     $('#ai-sys-slider').disabled = false;
     $('#ai-sys-slider-label').textContent = PH.llm.sliderLabel(pos);
+    paintSliderRow($('#ai-sys-slider-row'), pos);
   }
   // 滑块切换档位：刷新展示
   function onSysSliderChange() {
@@ -1622,6 +1627,47 @@
     $('#opt-overlay').classList.remove('loading');
   }
 
+  // ---------- 20 档滑块：刻度 / 方向色 / 行为说明 ----------
+  // 每档的一句话行为说明（与 lib/llm.js 的 LEVEL_PROMPTS 语义一一对应）
+  const SLIDER_DESCS = [
+    '全要素虚构，扩展成完整自洽的虚构情境',
+    '虚构 5–6 类要素，点明不展开细节',
+    '虚构约 4 类要素，搭出有人物有场景的小情境',
+    '虚构约 3 类场景要素，点到即止',
+    '恰好虚构 3 个场景要素，不写对话情节',
+    '恰好虚构 2 个粗略背景，一句话点到',
+    '恰好虚构 1 个要素，让情境略微落地',
+    '只虚构 1 个时间或地点要素',
+    '只点缀 1 个具体的时间或地点，近乎原文',
+    '不虚构任何信息，仅修语病的润色微调',
+    '只改通顺，不增不减任何信息',
+    '理顺逻辑、消除歧义',
+    '结构化：分点、小标题重组原文',
+    '补充必要的输出格式说明',
+    '补充主要的约束与步骤',
+    '补全结构、步骤、约束与输出格式',
+    '再补边界情况、异常处理与注意事项',
+    '先问 1–2 个澄清问题，再生成优化结果',
+    '先问 3–4 个澄清问题，再生成优化结果',
+    '先问 3–7 个澄清问题，再生成优化结果'
+  ];
+  // 滑块方向色：左半创意紫，右半详细青（写入容器 CSS 变量，轨道/thumb/刻度/标签随动）
+  function paintSliderRow(rowEl, pos) {
+    if (!rowEl) return;
+    rowEl.style.setProperty('--slider-thumb', pos <= 10 ? 'var(--creative)' : 'var(--detail)');
+    const ticks = rowEl.querySelectorAll('.opt-tick');
+    for (let i = 0; i < ticks.length; i++) ticks[i].classList.toggle('on', i === pos - 1);
+  }
+  // 初始化 20 个刻度点
+  function buildTicks(host) {
+    if (!host || host.childElementCount) return;
+    for (let i = 0; i < 20; i++) {
+      const t = document.createElement('span');
+      t.className = 'opt-tick';
+      host.appendChild(t);
+    }
+  }
+
   // 单滑块语义标签实时刷新
   function refreshSliderLabels() {
     const pos = parseInt($('#opt-slider').value, 10) || 10;
@@ -1630,6 +1676,8 @@
     // 创意度档高亮（左端）；详细度咨询档也高亮（右端）
     const lv = PH.llm.sliderToLevels(pos);
     lab.classList.toggle('hot', lv.creativity >= 7 || lv.detail >= 8);
+    paintSliderRow($('#opt-slider-row'), pos);
+    $('#opt-slider-desc').textContent = SLIDER_DESCS[pos - 1] || '';
   }
 
   // 阶段1 → 阶段2/3：开始优化
